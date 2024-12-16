@@ -6,9 +6,9 @@ Welcome to the **4G LTE Only Mode App**, your ultimate solution to lock your And
 
 ## **Badges**
 
-![GitHub stars](https://img.shields.io/github/stars/username/4g-lte-only-app)  
-![GitHub issues](https://img.shields.io/github/issues/username/4g-lte-only-app)  
-![GitHub forks](https://img.shields.io/github/forks/username/4g-lte-only-app)  
+![GitHub stars](https://img.shields.io/github/stars/ishara-madu/4G-LTE-Only-Mode-App-Lock-to-High-Speed-Networks)  
+![GitHub issues](https://img.shields.io/github/issues/ishara-madu/4G-LTE-Only-Mode-App-Lock-to-High-Speed-Networks)  
+![GitHub forks](https://img.shields.io/github/forks/ishara-madu/4G-LTE-Only-Mode-App-Lock-to-High-Speed-Networks)  
 [![Download on Play Store](https://img.shields.io/badge/Download-Play%20Store-green)](https://play.google.com/store/apps/details?id=com.example.4g_lte_only)
 
 ---
@@ -17,9 +17,6 @@ Welcome to the **4G LTE Only Mode App**, your ultimate solution to lock your And
 
 - **4G LTE Lock**  
   Lock your device to 4G LTE and prevent automatic switching to slower networks like 3G or 2G.
-
-- **Signal Strength Monitoring**  
-  View real-time network signal strength to optimize your connection.
 
 - **User-Friendly Interface**  
   A clean and intuitive design for effortless use.
