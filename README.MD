@@ -6,7 +6,7 @@ Welcome to the **4G LTE Only Mode App**, your ultimate solution to lock your And
 
 ## **Badges**
 
-https://PlayBadges.pavi2410.me/badge/downloads?id=<YOUR APP'S PACKAGE NAME>[&pretty]
+https://PlayBadges.pavi2410.me/badge/downloads?id=com.kiloo.subwaysurf[&pretty]
 
 ---
 
