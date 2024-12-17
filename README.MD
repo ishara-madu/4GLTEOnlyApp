@@ -11,7 +11,7 @@ Welcome to the **4G LTE Only Mode App**, your ultimate solution to lock your And
 ![GitHub stars](https://img.shields.io/github/stars/ishara-madu/4G-LTE-Only-Mode-App-Lock-to-High-Speed-Networks)  
 ![GitHub issues](https://img.shields.io/github/issues/ishara-madu/4G-LTE-Only-Mode-App-Lock-to-High-Speed-Networks)  
 ![GitHub forks](https://img.shields.io/github/forks/ishara-madu/4G-LTE-Only-Mode-App-Lock-to-High-Speed-Networks)  
-[![Download on Play Store](https://img.shields.io/badge/Download-Play%20Store-green)](https://play.google.com/store/apps/details?id=com.kiloo.subwaysurf)
+[![Download on Play Store](https://img.shields.io/badge/Download-Play%20Store-green)](https://play.google.com/store/apps/details?id=com.pixeleye.lteonly)
 
 
 ---
