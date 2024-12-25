@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.pixeleye.myapplication"
+    namespace = "com.pixeleye.lteonly"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.pixeleye.myapplication"
+        applicationId = "com.pixeleye.lteonly"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -33,6 +33,9 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    buildFeatures {
+        viewBinding = true
+    }
 }
 
 dependencies {
@@ -45,4 +48,6 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.3")
 }

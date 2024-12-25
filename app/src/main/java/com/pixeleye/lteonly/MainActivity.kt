@@ -1,4 +1,4 @@
-package com.pixeleye.myapplication
+package com.pixeleye.lteonly
 
 import android.content.ComponentName
 import android.content.Intent
@@ -9,12 +9,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import com.google.android.gms.ads.MobileAds
+import com.pixeleye.lteonly.databinding.ActivityMainBinding
+
 
 class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
+        enableEdgeToEdge()
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -30,7 +37,13 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+        val backgroundScope = CoroutineScope(Dispatchers.IO)
+        backgroundScope.launch {
+            MobileAds.initialize(this@MainActivity) {}
+        }
+
     }
+
 
     private fun openRadioInfo() {
         val intent = Intent(Intent.ACTION_MAIN)
@@ -44,5 +57,4 @@ class MainActivity : AppCompatActivity() {
     }
 
 }
-
 

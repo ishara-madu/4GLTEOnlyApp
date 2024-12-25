@@ -1,4 +1,4 @@
-package com.pixeleye.myapplication
+package com.pixeleye.lteonly
 
 import android.content.Intent
 import android.os.Bundle
