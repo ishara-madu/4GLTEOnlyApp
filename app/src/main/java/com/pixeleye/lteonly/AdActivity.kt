@@ -22,7 +22,8 @@ import com.google.android.gms.ads.FullScreenContentCallback
 
 class AdActivity : Application(), Application.ActivityLifecycleCallbacks, LifecycleObserver {
 
-    private val AD_UNIT_ID: String = "ca-app-pub-3679572083540798/9526000257"
+    private val AD_UNIT_ID: String = "ca-app-pub-3940256099942544/9257395921"
+//    private val AD_UNIT_ID: String = "ca-app-pub-3679572083540798/9526000257"
     private var currentActivity: Activity? = null
     private lateinit var appOpenAdManager: AppOpenAdManager
 
