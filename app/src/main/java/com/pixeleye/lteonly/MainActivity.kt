@@ -46,14 +46,22 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun openRadioInfo() {
-        val intent = Intent().apply {
+        val intent = Intent("android.intent.action.MAIN").apply {
             component = ComponentName("com.android.settings", "com.android.settings.RadioInfo")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) // Add this flag to ensure it's started as a new task
+        }
+        val intentNew = Intent("android.intent.action.MAIN").apply {
+            component = ComponentName("com.android.phone", "com.android.phone.settings.RadioInfo")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) // Add this flag to ensure it's started as a new task
         }
         try {
             startActivity(intent)
         } catch (e: Exception) {
+            try {
+            startActivity(intentNew)
+            }catch (e: Exception){
             Toast.makeText(this, "RadioInfo page not accessible.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
