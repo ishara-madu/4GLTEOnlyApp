@@ -4,11 +4,73 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy - 4G LTE Only</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+
+        header {
+            background-color: #007BFF;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        header p {
+            margin: 5px;
+        }
+
+        section {
+            background-color: #fff;
+            margin: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        section h2 {
+            color: #007BFF;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #007BFF;
+            color: #fff;
+        }
+
+        footer p {
+            margin: 0;
+        }
+
+        a {
+            color: #007BFF;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
+
     <header>
         <h1>Privacy Policy</h1>
-        <p><strong>Last Updated:</strong> [Insert Date]</p>
+        <p><strong>Last Updated:</strong> <span id="date"></span></p>
     </header>
 
     <section>
@@ -69,5 +131,12 @@
     <footer>
         <p>&copy; 2025 Ishara Madhusanka. All rights reserved.</p>
     </footer>
+
+    <script>
+        // Set today's date as the last updated date
+        const today = new Date().toLocaleDateString();
+        document.getElementById('date').textContent = today;
+    </script>
+    
 </body>
 </html>
