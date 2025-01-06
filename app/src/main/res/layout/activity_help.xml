@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
@@ -7,104 +8,112 @@
     android:layout_height="match_parent"
     tools:context=".HelpActivity">
 
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:title="Help"
+        app:titleCentered="true"
+        app:titleTextColor="@color/white"
+        android:background="@color/blue"
+        app:navigationIcon="@drawable/baseline_arrow_back_24"
+        app:navigationIconTint="@color/white"
+        />
+
+
+
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toBottomOf="parent"
         >
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/blue"
-            >
-            <ImageView
-                android:id="@+id/backbtn"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:src="@drawable/baseline_arrow_back_24"
-                android:padding="10dp"
-                />
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:text="Help"
-                android:textSize="32sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:paddingLeft="-60dp"
-                android:textColor="@color/white"
-                >
-            </TextView>
-        </LinearLayout>
-        <LinearLayout
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingHorizontal="10dp"
-            android:orientation="vertical"
             >
             <TextView
+                android:id="@+id/title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="How to use"
                 android:textSize="32sp"
                 android:textStyle="bold"
                 android:paddingVertical="20dp"
+                app:layout_constraintTop_toTopOf="parent"
                 />
             <TextView
+                android:id="@+id/steps"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Steps to follow:"
                 android:textStyle="bold"
+                app:layout_constraintTop_toBottomOf="@id/title"
                 />
             <TextView
+                android:id="@+id/step1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Step 1: Click on 'Network Info'"
+                app:layout_constraintTop_toBottomOf="@id/steps"
                 />
             <ImageView
+                android:id="@+id/image1"
                 android:layout_width="match_parent"
                 android:layout_height="500dp"
                 android:layout_marginHorizontal="60dp"
                 android:layout_marginVertical="20dp"
                 android:src="@drawable/help_1"
-
+                app:layout_constraintTop_toBottomOf="@id/step1"
                 />
             <TextView
+                android:id="@+id/step2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Step 2: Scroll down to see 'Set preferred Network Type'"
+                app:layout_constraintTop_toBottomOf="@id/image1"
                 />
             <ImageView
+                android:id="@+id/image2"
                 android:layout_width="match_parent"
                 android:layout_height="500dp"
                 android:layout_marginHorizontal="60dp"
                 android:layout_marginVertical="20dp"
                 android:src="@drawable/help_2"
-
+                app:layout_constraintTop_toBottomOf="@id/step2"
                 />
             <TextView
+                android:id="@+id/step3"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Step 3: Select 'LTE Only' for making 4G only mode"
+                app:layout_constraintTop_toBottomOf="@id/image2"
                 />
             <ImageView
+                android:id="@+id/image3"
                 android:layout_width="match_parent"
                 android:layout_height="500dp"
                 android:layout_marginHorizontal="60dp"
                 android:layout_marginVertical="20dp"
                 android:src="@drawable/help_3"
-
+                app:layout_constraintTop_toBottomOf="@id/step3"
                 />
             <TextView
+                android:id="@+id/note"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Note: May not work on some devices due to manufacturer restrictions. We do not reasonable such issues."
                 android:textStyle="bold"
                 android:layout_marginVertical="20dp"
+                app:layout_constraintTop_toBottomOf="@id/image3"
                 />
-        </LinearLayout>
-    </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </ScrollView>
 
-</ScrollView>
+</androidx.constraintlayout.widget.ConstraintLayout>

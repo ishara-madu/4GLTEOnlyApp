@@ -12,25 +12,47 @@
         android:id="@+id/top_image"
         android:layout_width="match_parent"
         android:layout_height="200dp"
-        android:src="@drawable/top_image"
+        android:src="@drawable/lte_only"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginTop="20dp"
+        />
 
 
     <com.google.android.material.button.MaterialButton
+        android:id="@+id/networkinfo"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="50dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/top_image"
         android:background="@drawable/corner_rounder"
         android:drawableLeft="@drawable/mobile_data"
+        android:drawableRight="@drawable/baseline_navigate_next_24"
         app:backgroundTint="@color/white"
         app:layout_constraintWidth_percent="0.9"
         android:text="NETWORK INFO"
         android:textColor="@color/black"
         android:elevation="10dp"
+        android:layout_marginTop="20dp"
+        />
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/help"
+        android:layout_width="0dp"
+        android:layout_height="50dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/networkinfo"
+        android:background="@drawable/corner_rounder"
+        android:drawableLeft="@drawable/question"
+        app:backgroundTint="@color/white"
+        android:drawableRight="@drawable/baseline_navigate_next_24"
+        app:layout_constraintWidth_percent="0.9"
+        android:text="HELP"
+        android:textColor="@color/black"
+        android:elevation="10dp"
+        android:layout_marginTop="10dp"
         />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

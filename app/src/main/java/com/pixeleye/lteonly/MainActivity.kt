@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+
         val backgroundScope = CoroutineScope(Dispatchers.IO)
         backgroundScope.launch {
             MobileAds.initialize(this@MainActivity) {}
@@ -57,9 +58,9 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         } catch (e: Exception) {
             try {
-            startActivity(intentNew)
-            }catch (e: Exception){
-            Toast.makeText(this, "RadioInfo page not accessible.", Toast.LENGTH_SHORT).show()
+                startActivity(intentNew)
+            } catch (e: Exception) {
+                Toast.makeText(this, "RadioInfo page not accessible.", Toast.LENGTH_SHORT).show()
             }
         }
     }

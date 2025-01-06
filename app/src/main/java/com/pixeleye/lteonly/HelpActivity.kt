@@ -7,8 +7,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.android.material.appbar.MaterialToolbar
 
 class HelpActivity : AppCompatActivity() {
+    private lateinit var toolbar: MaterialToolbar
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -19,10 +21,11 @@ class HelpActivity : AppCompatActivity() {
             insets
         }
 
-        findViewById<ImageView>(R.id.backbtn).setOnClickListener {
-            val intent = Intent(this,MainActivity::class.java)
-            startActivity(intent)
-            finish()
+        toolbar = findViewById(R.id.toolbar)
+
+        toolbar.setNavigationOnClickListener {
+            onBackPressed()
         }
+
     }
 }
