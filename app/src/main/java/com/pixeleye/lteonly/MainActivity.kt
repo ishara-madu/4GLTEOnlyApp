@@ -36,7 +36,6 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-
         val backgroundScope = CoroutineScope(Dispatchers.IO)
         backgroundScope.launch {
             MobileAds.initialize(this@MainActivity) {}
