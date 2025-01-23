@@ -71,52 +71,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun openBandModeSimSelectWithRoot() {
         try {
-            val commands = listOf(
-                // MediaTek Band Selection
-                "am start -n com.mediatek.engineermode/com.mediatek.engineermode.bandselect.BandModeSimSelect",
-                // Qualcomm Testing Menu
-                "am start -a android.intent.action.MAIN -n com.qualcomm.qti.networksetting/.MainActivity",
-                // General Android Testing Menu
-                "am start -a android.intent.action.MAIN -n com.android.settings/.TestingSettings",
-                // Samsung Service Mode
-                "am start -a android.intent.action.MAIN -n com.samsung.android.app.telephonyui/.ServiceModeApp"
-            )
+            // Command to start the activity
+            val command =
+                "am start -n com.mediatek.engineermode/com.mediatek.engineermode.bandselect.BandModeSimSelect\n"
 
-            var success = false
+            // Execute the command as root
+            val process = Runtime.getRuntime().exec("su")
+            val os = DataOutputStream(process.outputStream)
+            os.writeBytes(command)
+            os.flush()
+            os.close()
 
-            // Try executing each command
-            for (command in commands) {
-                try {
-                    val process = Runtime.getRuntime().exec("su")
-                    val os = DataOutputStream(process.outputStream)
-                    os.writeBytes("$command\n")
-                    os.flush()
-                    os.close()
-
-                    val result = process.waitFor()
-                    if (result == 0) {
-                        success = true
-                        Toast.makeText(this, "Opening Band Selection...", Toast.LENGTH_SHORT).show()
-                        break
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-
-            if (!success) {
-                Toast.makeText(
-                    this,
-                    "Failed to open Band Selection. Your device might not support it.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+            Toast.makeText(this, "Attempting to open Band Selection...", Toast.LENGTH_SHORT)
+                .show()
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "An unexpected error occurred.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Failed to open Band Selection. This feature requires a rooted MediaTek device.", Toast.LENGTH_LONG).show()
         }
     }
-
 
 }
 
