@@ -71,7 +71,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun openBandModeSimSelectWithRoot() {
         try {
-            // Command to start the activity
             val command =
                 "am start -n com.mediatek.engineermode/com.mediatek.engineermode.bandselect.BandModeSimSelect\n"
 
