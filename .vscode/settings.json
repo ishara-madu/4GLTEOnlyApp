@@ -1,0 +1,6 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "python.autoComplete.extraPaths": [
+        "/Users/ishara/.antigravity/extensions/continue.continue-0.1.5"
+    ]
+}
