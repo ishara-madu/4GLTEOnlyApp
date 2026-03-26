@@ -77,22 +77,16 @@
 
 ## Screenshots
 
-> **📸 Add your app screenshots below**
+<p align="center">
+  <img src="screenshots/home.jpg" width="230" alt="Home Screen" />
+  <img src="screenshots/analytics.jpg" width="230" alt="Analytics Dashboard" />
+  <img src="screenshots/tools.jpg" width="230" alt="Speed Test" />
+</p>
 
-### Home Screen
-![Home Screen](screenshots/home.jpg)
-
-### Analytics Dashboard
-![Analytics](screenshots/analytics.jpg)
-
-### Speed Test
-![Speed Test](screenshots/tools.jpg)
-
-### Settings
-![Settings](screenshots/settings.jpg)
-
-### Dark Theme
-![Dark Theme](screenshots/dark_theme.png)
+<p align="center">
+  <img src="screenshots/settings.jpg" width="230" alt="Settings" />
+  <img src="screenshots/dark_theme.png" width="230" alt="Dark Theme" />
+</p>
 
 ---
 
