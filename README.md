@@ -85,7 +85,7 @@
 
 <p align="center">
   <img src="screenshots/settings.jpg" width="230" alt="Settings" />
-  <img src="screenshots/dark_theme.png" width="230" alt="Dark Theme" />
+  <img src="screenshots/dark_theme.jpg" width="230" alt="Dark Theme" />
 </p>
 
 ---
@@ -104,7 +104,7 @@
 [![Google Play Store](.github/play_badge.png)](https://play.google.com/store/apps/details?id=com.pixeleye.lteonly)
 
 ### From APK (Direct Download)
-1. Download the latest APK from the [Releases](https://github.com/yourusername/ForceLTEOnly/releases) page
+1. Download the latest APK from the [Releases](https://github.com/ishara-madu/4GLTEOnlyApp/releases) page
 2. Enable "Install from unknown sources" in your device settings
 3. Open the downloaded APK file
 4. Tap Install
@@ -377,9 +377,9 @@ SOFTWARE.
 ## Support
 
 ### Get Help
-- 📖 Check the [Wiki](https://github.com/yourusername/ForceLTEOnly/wiki)
-- 💬 Join our [Discussions](https://github.com/yourusername/ForceLTEOnly/discussions)
-- 🐛 Report bugs via [Issues](https://github.com/yourusername/ForceLTEOnly/issues)
+- 📖 Check the [Wiki](https://github.com/ishara-madu/4GLTEOnlyApp/wiki)
+- 💬 Join our [Discussions](https://github.com/ishara-madu/4GLTEOnlyApp/discussions)
+- 🐛 Report bugs via [Issues](https://github.com/ishara-madu/4GLTEOnlyApp/issues)
 
 ### Rate the App
 If you find this app useful, please consider:
@@ -404,7 +404,7 @@ If you'd like to support development:
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/ishara-madu">PixelEye</a>
+  Made with ❤️ by <a href="https://github.com/ishara-madu">Ishara Madhusanka</a>
 </p>
 
 <p align="center">
