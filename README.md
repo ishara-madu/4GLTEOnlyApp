@@ -80,16 +80,16 @@
 > **📸 Add your app screenshots below**
 
 ### Home Screen
-![Home Screen](screenshots/home_screen.png)
+![Home Screen](screenshots/home.jpg)
 
 ### Analytics Dashboard
-![Analytics](screenshots/analytics.png)
+![Analytics](screenshots/analytics.jpg)
 
 ### Speed Test
-![Speed Test](screenshots/speed_test.png)
+![Speed Test](screenshots/tools.jpg)
 
 ### Settings
-![Settings](screenshots/settings.png)
+![Settings](screenshots/settings.jpg)
 
 ### Dark Theme
 ![Dark Theme](screenshots/dark_theme.png)
