@@ -2186,7 +2186,7 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
                 Column {
                     Text("DEVELOPER", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Pixeleye Studio", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Ishara Madhusanka", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "Sophisticated network tools for advanced users. Designed with a focus on simplicity and performance.",
@@ -2204,12 +2204,12 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
             })
             
             SettingsActionRow("Privacy Policy", onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pixeleye.studio/privacy"))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/privacy"))
                 context.startActivity(intent)
             })
             
             SettingsActionRow("Terms of Service", onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pixeleye.studio/terms"))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/terms"))
                 context.startActivity(intent)
             })
             
