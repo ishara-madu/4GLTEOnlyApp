@@ -410,11 +410,11 @@ If you'd like to support development:
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/yourusername">PixelEye</a>
+  Made with ❤️ by <a href="https://github.com/ishara-madu">PixelEye</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/yourusername/ForceLTEOnly">Repository</a> •
-  <a href="https://github.com/yourusername/ForceLTEOnly/releases">Releases</a> •
-  <a href="https://github.com/yourusername/ForceLTEOnly/issues">Issues</a>
+  <a href="https://github.com/ishara-madu/4GLTEOnlyApp">Repository</a> •
+  <a href="https://github.com/ishara-madu/4GLTEOnlyApp/releases">Releases</a> •
+  <a href="https://github.com/ishara-madu/4GLTEOnlyApp/issues">Issues</a>
 </p>
