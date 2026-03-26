@@ -25,11 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -259,11 +257,15 @@ fun DashboardScreen(themeManager: ThemeManager) {
             3 -> SettingsTab(themeManager, context)
         }
         
-        NeumorphicBottomBar(
-            selectedTab = selectedTab,
-            onTabSelected = { selectedTab = it },
+        Column(
             modifier = Modifier.align(Alignment.BottomCenter)
-        )
+        ) {
+            BannerAd()
+            NeumorphicBottomBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it }
+            )
+        }
 
         if (showHowToUseSheet) {
             HowToUseBottomSheet(onDismiss = { showHowToUseSheet = false })
@@ -279,7 +281,7 @@ fun NeumorphicBottomBar(
 ) {
     val navItems = listOf(
         NavItem(Icons.Default.Home, "Home"),
-        NavItem(Icons.Default.List, "Analytics"),
+        NavItem(Icons.AutoMirrored.Filled.List, "Analytics"),
         NavItem(Icons.Default.Build, "Tools"),
         NavItem(Icons.Default.Settings, "Settings")
     )
@@ -396,7 +398,7 @@ fun HomeTab(
                         .background(NeumorphicBackground, RoundedCornerShape(12.dp))
                 ) {
                     Icon(
-                        imageVector = Icons.Default.HelpOutline, 
+                        imageVector = Icons.AutoMirrored.Filled.HelpOutline, 
                         contentDescription = "How to Use",
                         tint = GradientStart,
                         modifier = Modifier.size(20.dp)
@@ -430,7 +432,16 @@ fun HomeTab(
             
             Spacer(modifier = Modifier.height(32.dp))
             
-            MainForce4GButton(onClick = { RadioInfoHelper.openRadioInfo(context) })
+            MainForce4GButton(onClick = { 
+                val activity = context as? android.app.Activity
+                if (activity != null) {
+                    AdManager.showInterstitial(activity) {
+                        RadioInfoHelper.openRadioInfo(context)
+                    }
+                } else {
+                    RadioInfoHelper.openRadioInfo(context)
+                }
+            })
             
             Spacer(modifier = Modifier.height(32.dp))
             
@@ -799,7 +810,7 @@ fun ToolsTab(
                         Text("Network Configuration", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = TextSecondary)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary)
             }
         }
     }
@@ -998,7 +1009,7 @@ fun SettingsActionRow(title: String, trailingIcon: androidx.compose.ui.graphics.
         if (trailingIcon != null) {
             Icon(trailingIcon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
         } else {
-            Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -1051,7 +1062,7 @@ fun SettingsCard(
                     Text(title, style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
                 if (onClick != null) {
-                    Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
                 }
             }
             if (content != null) {

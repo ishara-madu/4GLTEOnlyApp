@@ -10,6 +10,7 @@ class LteOnlyApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AdManager.initialize(this)
         createNotificationChannels()
     }
 
