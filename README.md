@@ -1,7 +1,7 @@
 # Force LTE Only
 
 <p align="center">
-  <img src=".github/logo.png" alt="Force LTE Only Logo" width="200"/>
+  <img src="app/src/main/res/drawable/ic_launcher_foreground.webp" alt="Force LTE Only Logo" width="200"/>
 </p>
 
 <p align="center">
@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/yourusername/ForceLTEOnly/releases">
-    <img src="https://img.shields.io/github/v/release/yourusername/ForceLTEOnly?style=flat-square" alt="GitHub Release"/>
+  <a href="https://github.com/ishara-madu/4GLTEOnlyApp/releases">
+    <img src="https://img.shields.io/github/v/release/ishara-madu/4GLTEOnlyApp?style=flat-square" alt="GitHub Release"/>
   </a>
-  <a href="https://github.com/yourusername/ForceLTEOnly/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/yourusername/ForceLTEOnly?style=flat-square" alt="License"/>
+  <a href="https://github.com/ishara-madu/4GLTEOnlyApp/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/ishara-madu/4GLTEOnlyApp?style=flat-square" alt="License"/>
   </a>
   <a href="https://android.com">
     <img src="https://img.shields.io/badge/platform-Android-green?style=flat-square" alt="Platform"/>
@@ -125,7 +125,7 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/ForceLTEOnly.git
+   git clone https://github.com/ishara-madu/4GLTEOnlyApp.git
    cd ForceLTEOnly
    ```
 
@@ -154,8 +154,8 @@ Before building, ensure you have the following installed:
    - Configure signing in `gradle.properties` or use Android Studio's signing config
 
 6. **Find the APK**
-   - Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
-   - Release APK: `app/build/outputs/apk/release/app-release.apk`
+   - Debug APK: `app/release/app-debug.apk`
+   - Release APK: `app/release/app-release.apk`
 
 ---
 
@@ -312,7 +312,7 @@ Contributions are welcome! Here's how you can help:
 
 1. **Fork the Repository**
    ```bash
-   git fork https://github.com/yourusername/ForceLTEOnly
+   git fork https://github.com/ishara-madu/4GLTEOnlyApp
    ```
 
 2. **Create a Feature Branch**
