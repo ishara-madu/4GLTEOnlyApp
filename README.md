@@ -101,7 +101,7 @@
 ## Installation
 
 ### From Google Play Store
-![Play Store](https://img.shields.io/badge/Google_Play-414141?style=flat&logo=google-play&logoColor=white)(https://play.google.com/store/apps/details?id=com.pixeleye.lteonly)
+![Play Store][(https://img.shields.io/badge/Google_Play-414141?style=flat&logo=google-play&logoColor=white)(https://play.google.com/store/apps/details?id=com.pixeleye.lteonly)]
 
 ### From APK (Direct Download)
 1. Download the latest APK from the [Releases](https://github.com/ishara-madu/4GLTEOnlyApp/releases) page
