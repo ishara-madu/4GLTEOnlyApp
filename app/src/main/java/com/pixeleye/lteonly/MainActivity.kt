@@ -2198,6 +2198,11 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
             
             Spacer(modifier = Modifier.height(24.dp))
             
+            SettingsActionRow("Developer Website", onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/"))
+                context.startActivity(intent)
+            })
+            
             SettingsActionRow("Privacy Policy", onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pixeleye.studio/privacy"))
                 context.startActivity(intent)
