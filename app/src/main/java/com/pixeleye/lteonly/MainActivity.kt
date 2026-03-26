@@ -2172,7 +2172,7 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
             
             Spacer(modifier = Modifier.height(16.dp))
             Text("Force LTE Only", style = Typography.titleLarge.copy(fontSize = 22.sp), color = TextPrimary, fontWeight = FontWeight.Bold)
-            Text("Version 1.0.0", style = Typography.bodyMedium.copy(fontSize = 14.sp), color = TextSecondary)
+            Text("Version 1.5.0", style = Typography.bodyMedium.copy(fontSize = 14.sp), color = TextSecondary)
             
             Spacer(modifier = Modifier.height(32.dp))
             
