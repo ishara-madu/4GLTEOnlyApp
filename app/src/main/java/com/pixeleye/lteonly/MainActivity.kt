@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -370,6 +372,8 @@ fun HomeTab(
     onHowToUseClick: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
+    var showDeviceCodesSheet by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -434,18 +438,30 @@ fun HomeTab(
             
             MainForce4GButton(onClick = { 
                 val activity = context as? android.app.Activity
+                val openInfo = {
+                    try {
+                        RadioInfoHelper.openRadioInfo(context)
+                    } catch (e: Exception) {
+                        showDeviceCodesSheet = true
+                    }
+                }
+                
                 if (activity != null) {
                     AdManager.showInterstitial(activity) {
-                        RadioInfoHelper.openRadioInfo(context)
+                        openInfo()
                     }
                 } else {
-                    RadioInfoHelper.openRadioInfo(context)
+                    openInfo()
                 }
             })
             
             Spacer(modifier = Modifier.height(32.dp))
             
             DataSpeedCard(speedInfo = networkInfo.speedInfo, context = context)
+        }
+
+        if (showDeviceCodesSheet) {
+            DeviceCodesBottomSheet(onDismiss = { showDeviceCodesSheet = false })
         }
     }
 }
@@ -2312,5 +2328,81 @@ private fun HowToStep(number: String, title: String, description: String) {
             Text(title, style = Typography.titleSmall.copy(fontSize = 14.sp), color = TextPrimary, fontWeight = FontWeight.Bold)
             Text(description, style = Typography.bodySmall.copy(fontSize = 12.sp), color = TextSecondary)
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeviceCodesBottomSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState()
+    
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = NeumorphicBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "Manual Secret Codes",
+                style = Typography.titleLarge,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Your device blocks automatic access. You MUST MANUALLY TYPE the secret code below in your dialer. Copy-pasting will NOT work.",
+                style = Typography.bodyMedium,
+                color = TextSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            SecretCodeItem(brand = "Samsung", code = "*#0011#", context = context)
+            SecretCodeItem(brand = "Samsung Band Selection", code = "*#*#2263#*#*", context = context)
+            SecretCodeItem(brand = "Honor / Huawei", code = "*#*#6130#*#*", context = context)
+            SecretCodeItem(brand = "Xiaomi / Poco / Vivo", code = "*#*#4636#*#*", context = context)
+        }
+    }
+}
+
+@Composable
+fun SecretCodeItem(brand: String, code: String, context: Context) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .neumorphic(cornerRadius = 16.dp, elevation = 4.dp)
+            .background(NeumorphicBackground, RoundedCornerShape(16.dp))
+            .clickable {
+                Toast.makeText(context, "Please manually type: $code", Toast.LENGTH_LONG).show()
+                
+                try {
+                    val dialIntent = Intent(Intent.ACTION_DIAL)
+                    dialIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    context.startActivity(dialIntent)
+                } catch (e: Exception) {
+                    // Fallback if no dialer
+                }
+            }
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(brand, style = Typography.labelSmall, color = TextSecondary)
+            Text(code, style = Typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+        }
+        Icon(
+            imageVector = Icons.Default.Dialpad,
+            contentDescription = "Manual Type",
+            tint = GradientStart,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

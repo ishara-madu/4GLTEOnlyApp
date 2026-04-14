@@ -15,8 +15,6 @@ object AdManager {
 
     const val BANNER_AD_UNIT_ID = "ca-app-pub-LOCAL_ID_HERE"
 
-    const val BANNER_AD_UNIT_ID = "ca-app-pub-LOCAL_ID_HERE"
-
     private var interstitialAd: InterstitialAd? = null
     private var isAdLoading = false
 

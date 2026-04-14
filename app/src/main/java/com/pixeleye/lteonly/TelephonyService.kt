@@ -9,7 +9,6 @@ import android.os.Build
 import android.telephony.CellInfo
 import android.telephony.CellInfoLte
 import android.telephony.CellSignalStrengthLte
-import android.telephony.CellInfoNr
 import android.telephony.CellInfoWcdma
 import android.telephony.CellInfoGsm
 import android.telephony.TelephonyManager
@@ -345,7 +344,7 @@ class TelephonyService(private val context: Context) {
         return try {
             when (telephonyManager.dataNetworkType) {
                 TelephonyManager.NETWORK_TYPE_LTE -> "4G LTE"
-                TelephonyManager.NETWORK_TYPE_NR -> "5G NR"
+                TelephonyManager.NETWORK_TYPE_NR.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q } -> "5G NR"
                 TelephonyManager.NETWORK_TYPE_HSPAP,
                 TelephonyManager.NETWORK_TYPE_HSPA -> "3G HSPA"
                 TelephonyManager.NETWORK_TYPE_EDGE,
@@ -376,7 +375,7 @@ class TelephonyService(private val context: Context) {
                         if (bestSs is android.telephony.CellSignalStrengthLte) {
                             rsrpResult = bestSs.rsrp.takeIf { it != Int.MAX_VALUE } ?: 0
                             rsrqResult = bestSs.rsrq.takeIf { it != Int.MAX_VALUE } ?: 0
-                        } else if (bestSs is android.telephony.CellSignalStrengthNr) {
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && bestSs is android.telephony.CellSignalStrengthNr) {
                             rsrpResult = bestSs.ssRsrp.takeIf { it != Int.MAX_VALUE } ?: 0
                             rsrqResult = bestSs.ssRsrq.takeIf { it != Int.MAX_VALUE } ?: 0
                         } else {
@@ -416,24 +415,24 @@ class TelephonyService(private val context: Context) {
                         rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
                         level = getSignalLevel(rsrp)
                     }
-                    is android.telephony.CellInfoNr -> {
-                        val ss = registeredCell.cellSignalStrength as android.telephony.CellSignalStrengthNr
-                        rsrp = ss.ssRsrp.takeIf { it != Int.MAX_VALUE && it != 0 } ?: 0
-                        rsrq = ss.ssRsrq.takeIf { it != Int.MAX_VALUE } ?: 0
-                        rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
-                        level = getSignalLevel(rsrp)
-                    }
-                    is android.telephony.CellInfoWcdma -> {
-                        val ss = registeredCell.cellSignalStrength
-                        rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
-                        rsrp = rssi // Fallback for 3G
-                        level = getSignalLevel(rsrp)
-                    }
-                    is android.telephony.CellInfoGsm -> {
-                        val ss = registeredCell.cellSignalStrength
-                        rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
-                        rsrp = rssi // Fallback for 2G
-                        level = getSignalLevel(rsrp)
+                    else -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && registeredCell is android.telephony.CellInfoNr) {
+                            val ss = registeredCell.cellSignalStrength as android.telephony.CellSignalStrengthNr
+                            rsrp = ss.ssRsrp.takeIf { it != Int.MAX_VALUE && it != 0 } ?: 0
+                            rsrq = ss.ssRsrq.takeIf { it != Int.MAX_VALUE } ?: 0
+                            rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
+                            level = getSignalLevel(rsrp)
+                        } else if (registeredCell is android.telephony.CellInfoWcdma) {
+                            val ss = registeredCell.cellSignalStrength
+                            rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
+                            rsrp = rssi // Fallback for 3G
+                            level = getSignalLevel(rsrp)
+                        } else if (registeredCell is android.telephony.CellInfoGsm) {
+                            val ss = registeredCell.cellSignalStrength
+                            rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
+                            rsrp = rssi // Fallback for 2G
+                            level = getSignalLevel(rsrp)
+                        }
                     }
                 }
                 
@@ -492,13 +491,16 @@ class TelephonyService(private val context: Context) {
         return try {
             when (registeredCell) {
                 is android.telephony.CellInfoLte -> registeredCell.cellIdentity.ci.takeIf { it != Int.MAX_VALUE && it != 0 }?.toString() ?: "--"
-                is android.telephony.CellInfoNr -> {
-                    val nci = (registeredCell.cellIdentity as android.telephony.CellIdentityNr).nci
-                    nci.takeIf { it != Long.MAX_VALUE && it != 0L }?.toString() ?: "--"
+                else -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && registeredCell is android.telephony.CellInfoNr) {
+                        val nci = (registeredCell.cellIdentity as android.telephony.CellIdentityNr).nci
+                        nci.takeIf { it != Long.MAX_VALUE && it != 0L }?.toString() ?: "--"
+                    } else if (registeredCell is android.telephony.CellInfoWcdma) {
+                        registeredCell.cellIdentity.cid.takeIf { it != Int.MAX_VALUE && it != 0 }?.toString() ?: "--"
+                    } else if (registeredCell is android.telephony.CellInfoGsm) {
+                        registeredCell.cellIdentity.cid.takeIf { it != Int.MAX_VALUE && it != 0 }?.toString() ?: "--"
+                    } else "--"
                 }
-                is android.telephony.CellInfoWcdma -> registeredCell.cellIdentity.cid.takeIf { it != Int.MAX_VALUE && it != 0 }?.toString() ?: "--"
-                is android.telephony.CellInfoGsm -> registeredCell.cellIdentity.cid.takeIf { it != Int.MAX_VALUE && it != 0 }?.toString() ?: "--"
-                else -> "--"
             }
         } catch (e: Exception) {
             "--"
@@ -514,20 +516,19 @@ class TelephonyService(private val context: Context) {
                     val band = getLteBand(earfcn)
                     if (band != "--") "B$band ($earfcn)" else "EARFCN $earfcn"
                 }
-                is android.telephony.CellInfoNr -> {
-                    val nrarfcn = (registeredCell.cellIdentity as android.telephony.CellIdentityNr).nrarfcn
-                    val band = getNrBand(nrarfcn)
-                    if (band != "--") "n$band ($nrarfcn)" else "ARFCN $nrarfcn"
+                else -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && registeredCell is android.telephony.CellInfoNr) {
+                        val nrarfcn = (registeredCell.cellIdentity as android.telephony.CellIdentityNr).nrarfcn
+                        val band = getNrBand(nrarfcn)
+                        if (band != "--") "n$band ($nrarfcn)" else "ARFCN $nrarfcn"
+                    } else if (registeredCell is android.telephony.CellInfoWcdma) {
+                        val uarfcn = registeredCell.cellIdentity.uarfcn
+                        "U$uarfcn"
+                    } else if (registeredCell is android.telephony.CellInfoGsm) {
+                        val arfcn = registeredCell.cellIdentity.arfcn
+                        "GSM $arfcn"
+                    } else "--"
                 }
-                is android.telephony.CellInfoWcdma -> {
-                    val uarfcn = registeredCell.cellIdentity.uarfcn
-                    "U$uarfcn"
-                }
-                is android.telephony.CellInfoGsm -> {
-                    val arfcn = registeredCell.cellIdentity.arfcn
-                    "GSM $arfcn"
-                }
-                else -> "--"
             }
         } catch (e: Exception) {
             "--"

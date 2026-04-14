@@ -19,7 +19,8 @@ object RadioInfoHelper {
             ComponentName("com.android.phone", "com.android.phone.settings.RadioInfo"),
             ComponentName("com.android.phone", "com.android.phone.PhoneInterfaceManager"),
             ComponentName("com.sec.android.app.servicemodeapp", "com.sec.android.app.servicemodeapp.ServiceModeApp"), // Samsung
-            ComponentName("com.miui.cit", "com.miui.cit.CitActivity") // Xiaomi
+            ComponentName("com.miui.cit", "com.miui.cit.CitActivity"), // Xiaomi
+            ComponentName("com.huawei.android.projectmenu", "com.huawei.android.projectmenu.ProjectMenuActivity") // Huawei/Honor
         )
 
         for (target in targets) {
@@ -37,11 +38,6 @@ object RadioInfoHelper {
             }
         }
 
-        // If the loop finishes without returning, none of the intents worked
-        Toast.makeText(
-            context, 
-            "This feature is not supported or working on your device.", 
-            Toast.LENGTH_LONG
-        ).show()
+       throw Exception("Radio Info menu not found or access blocked")
     }
 }
