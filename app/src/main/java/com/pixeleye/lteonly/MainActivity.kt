@@ -28,40 +28,44 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.work.*
 import com.pixeleye.lteonly.ui.theme.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private lateinit var themeManager: ThemeManager
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         themeManager = ThemeManager.getInstance(this)
-        
+
         setContent {
             val theme by themeManager.themeFlow.collectAsStateWithLifecycle()
             val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -70,9 +74,9 @@ class MainActivity : ComponentActivity() {
                 AppTheme.DARK -> true
                 AppTheme.SYSTEM -> isSystemDark
             }
-            
+
             com.pixeleye.lteonly.ui.theme.globalIsDarkTheme = darkTheme
-            
+
             ForceLTEOnlyTheme(darkTheme = darkTheme) {
                 DashboardScreen(themeManager)
             }
@@ -94,12 +98,13 @@ fun DashboardScreen(themeManager: ThemeManager) {
     var speedTestPhase by remember { mutableStateOf("IDLE") }
     var pingTestResult by remember { mutableStateOf<PingTestResult?>(null) }
     var hasSavedInitialSignal by remember { mutableStateOf(false) }
-    
+    var isReturningFromSettings by rememberSaveable { mutableStateOf(false) }
+
     var storedSignalHistory by remember { mutableStateOf<List<SignalHistoryEntity>>(emptyList()) }
     var storedDataUsage by remember { mutableStateOf<List<DataUsageEntity>>(emptyList()) }
     var storedSpeedTests by remember { mutableStateOf<List<SpeedTestEntity>>(emptyList()) }
     var storedPingTests by remember { mutableStateOf<List<PingTestEntity>>(emptyList()) }
-    
+
     val telephonyService = remember { TelephonyService(context) }
     val intent = (context as? ComponentActivity)?.intent
 
@@ -129,27 +134,43 @@ fun DashboardScreen(themeManager: ThemeManager) {
     LaunchedEffect(Unit) {
         telephonyService.getStoredSignalHistory().collect { storedSignalHistory = it }
     }
-    
+
     LaunchedEffect(Unit) {
         telephonyService.getStoredDataUsage().collect { storedDataUsage = it }
     }
-    
+
     LaunchedEffect(Unit) {
         telephonyService.getStoredSpeedTests().collect { storedSpeedTests = it }
     }
-    
+
     LaunchedEffect(Unit) {
         telephonyService.getStoredPingTests().collect { storedPingTests = it }
     }
-    
+
     val scope = rememberCoroutineScope()
 
     val settingsManager = remember { SettingsManager.getInstance(context) }
     val speedTestReminder by settingsManager.speedTestReminderFlow.collectAsStateWithLifecycle()
 
+    // Lifecycle observer to trigger review when returning from hidden settings
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && isReturningFromSettings) {
+                isReturningFromSettings = false
+                scope.launch {
+                    delay(1500) // Give the user 1.5 seconds to settle in after returning
+                    ReviewHelper.askForReview(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
 
     var showHowToUseSheet by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(speedTestReminder) {
         val workManager = WorkManager.getInstance(context)
         if (speedTestReminder) {
@@ -187,11 +208,12 @@ fun DashboardScreen(themeManager: ThemeManager) {
     ) {
         when (selectedTab) {
             0 -> HomeTab(
-                networkInfo = networkInfo, 
-                telephonyService = telephonyService, 
-                context = context, 
+                networkInfo = networkInfo,
+                telephonyService = telephonyService,
+                context = context,
                 hasPermission = hasPermission,
-                onHowToUseClick = { showHowToUseSheet = true }
+                onHowToUseClick = { showHowToUseSheet = true },
+                onHiddenMenuOpened = { isReturningFromSettings = true }
             )
             1 -> AnalyticsTab(
                 networkInfo = networkInfo,
@@ -210,7 +232,7 @@ fun DashboardScreen(themeManager: ThemeManager) {
                     if (!isSpeedTestRunning) {
                         isSpeedTestRunning = true
                         speedTestResult = SpeedTestResult(0.0, 0.0, 0, networkInfo.networkType, false)
-                        
+
                         scope.launch {
                             val pingJob = launch {
                                 while (isActive) {
@@ -221,23 +243,23 @@ fun DashboardScreen(themeManager: ThemeManager) {
                                     delay(1000)
                                 }
                             }
-                            
+
                             speedTestPhase = "DOWNLOAD"
                             val download = telephonyService.measureDownloadSpeed { progress ->
                                 speedTestResult = speedTestResult?.copy(downloadSpeed = progress)
                             }
                             speedTestResult = speedTestResult?.copy(downloadSpeed = download)
-                            
+
                             speedTestPhase = "UPLOAD"
                             val upload = telephonyService.measureUploadSpeed { progress ->
                                 speedTestResult = speedTestResult?.copy(uploadSpeed = progress)
                             }
                             speedTestResult = speedTestResult?.copy(uploadSpeed = upload, success = true)
-                            
+
                             speedTestPhase = "DONE"
                             isSpeedTestRunning = false
                             pingJob.cancel()
-                            
+
                             speedTestResult?.let {
                                 telephonyService.saveSpeedTestRecord(it.downloadSpeed, it.uploadSpeed, it.ping)
                             }
@@ -258,7 +280,7 @@ fun DashboardScreen(themeManager: ThemeManager) {
             )
             3 -> SettingsTab(themeManager, context)
         }
-        
+
         Column(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
@@ -365,11 +387,12 @@ data class NavItem(val icon: androidx.compose.ui.graphics.vector.ImageVector, va
 
 @Composable
 fun HomeTab(
-    networkInfo: NetworkInfo, 
-    telephonyService: TelephonyService, 
+    networkInfo: NetworkInfo,
+    telephonyService: TelephonyService,
     context: Context,
     hasPermission: Boolean = true,
-    onHowToUseClick: () -> Unit = {}
+    onHowToUseClick: () -> Unit = {},
+    onHiddenMenuOpened: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     var showDeviceCodesSheet by remember { mutableStateOf(false) }
@@ -383,7 +406,7 @@ fun HomeTab(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -402,16 +425,16 @@ fun HomeTab(
                         .background(NeumorphicBackground, RoundedCornerShape(12.dp))
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.HelpOutline, 
+                        imageVector = Icons.AutoMirrored.Filled.HelpOutline,
                         contentDescription = "How to Use",
                         tint = GradientStart,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -433,19 +456,21 @@ fun HomeTab(
                     hasPermission = hasPermission
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
-            MainForce4GButton(onClick = { 
+
+            MainForce4GButton(onClick = {
                 val activity = context as? android.app.Activity
                 val openInfo = {
                     try {
+                        // Notify that hidden menu is being opened
+                        onHiddenMenuOpened()
                         RadioInfoHelper.openRadioInfo(context)
                     } catch (e: Exception) {
                         showDeviceCodesSheet = true
                     }
                 }
-                
+
                 if (activity != null) {
                     AdManager.showInterstitial(activity) {
                         openInfo()
@@ -454,9 +479,9 @@ fun HomeTab(
                     openInfo()
                 }
             })
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             DataSpeedCard(speedInfo = networkInfo.speedInfo, context = context)
         }
 
@@ -481,7 +506,7 @@ fun AnalyticsTab(
     val currentRsrp = networkInfo.signalStrength.rsrp
     val signalColor = getSignalLevelColor(networkInfo.signalStrength.level)
     val signalRsrpHistory = signalHistory.map { it.rsrp }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -497,7 +522,7 @@ fun AnalyticsTab(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(24.dp))
-        
+
         // Signal History Card
         AnalyticsCard(
             title = "SIGNAL HISTORY",
@@ -521,10 +546,10 @@ fun AnalyticsTab(
                 }
             }
         }
-        
-        
+
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Speed Test History Card
         AnalyticsCard(
             title = "SPEED TEST HISTORY",
@@ -532,18 +557,18 @@ fun AnalyticsTab(
         ) {
             if (speedTests.isNotEmpty()) {
                 var selectedTest by remember { mutableStateOf<SpeedTestEntity?>(null) }
-                
+
                 SpeedTestBarChart(
                     speedTests = speedTests.takeLast(10).reversed(),
                     onTestClick = { selectedTest = it }
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${speedTests.size} tests", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
                     Text("Best: ${String.format("%.1f", speedTests.maxOfOrNull { maxOf(it.downloadSpeed, it.uploadSpeed) } ?: 0.0)} Mbps", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
                 }
-                
+
                 if (selectedTest != null) {
                     SpeedTestDetailSheet(
                         test = selectedTest!!,
@@ -556,9 +581,9 @@ fun AnalyticsTab(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Ping Test History Card
         AnalyticsCard(
             title = "PING TEST HISTORY",
@@ -649,7 +674,7 @@ fun ToolsTab(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(24.dp))
-        
+
         // Speed Test Card
         Box(
             modifier = Modifier
@@ -662,7 +687,7 @@ fun ToolsTab(
                 Text("SPEED TEST", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
                 Text("Network Speed", style = Typography.titleMedium.copy(fontSize = 18.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 SpeedometerProgress(
                     speed = if (!isSpeedTestRunning && (speedTestPhase == "DONE" || speedTestPhase == "IDLE")) {
                         0.0
@@ -677,11 +702,11 @@ fun ToolsTab(
                     phase = speedTestPhase,
                     modifier = Modifier.size(200.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 val animatedDots = rememberAnimatedDots()
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -714,9 +739,9 @@ fun ToolsTab(
                         unit = "ms"
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -741,9 +766,9 @@ fun ToolsTab(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Ping Test Card
         Box(
             modifier = Modifier
@@ -756,7 +781,7 @@ fun ToolsTab(
                 Text("PING TEST", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
                 Text("Latency Check", style = Typography.titleMedium.copy(fontSize = 18.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -771,9 +796,9 @@ fun ToolsTab(
                         Text("ms", style = Typography.labelMedium.copy(fontSize = 14.sp), color = TextSecondary)
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -798,9 +823,9 @@ fun ToolsTab(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // APN Settings Card
         Box(
             modifier = Modifier
@@ -808,7 +833,7 @@ fun ToolsTab(
                 .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
                 .background(NeumorphicBackground, RoundedCornerShape(24.dp))
                 .padding(20.dp)
-                .clickable { 
+                .clickable {
                     val intent = Intent(Settings.ACTION_APN_SETTINGS)
                     context.startActivity(intent)
                 }
@@ -846,15 +871,15 @@ private fun SpeedColumn(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @Composable
 private fun PingHistoryChart(history: List<Int>, modifier: Modifier = Modifier) {
     if (history.isEmpty()) return
-    
+
     val maxLatency = history.maxOrNull() ?: 1
     val normalizedHistory = history.map { (it.toFloat() / maxLatency).coerceIn(0.1f, 1f) }
-    
+
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val barWidth = width / history.size
-        
+
         normalizedHistory.forEachIndexed { index, value ->
             val barHeight = height * value
             val x = index * barWidth
@@ -876,28 +901,28 @@ private fun PingHistoryChart(history: List<Int>, modifier: Modifier = Modifier) 
 @Composable
 private fun SpeedHistoryChart(history: List<SpeedTestEntity>, modifier: Modifier = Modifier) {
     if (history.isEmpty()) return
-    
+
     val maxDownload = history.maxOfOrNull { it.downloadSpeed }?.toFloat() ?: 1f
     val maxUpload = history.maxOfOrNull { it.uploadSpeed }?.toFloat() ?: 1f
     val maxSpeed = maxOf(maxDownload, maxUpload, 1f)
-    
+
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val barWidth = width / history.size
-        
+
         history.forEachIndexed { index, test ->
             val downHeight = height * ((test.downloadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
             val upHeight = height * ((test.uploadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
             val x = index * barWidth
-            
+
             drawRoundRect(
                 color = androidx.compose.ui.graphics.Color(0xFF8E99F3),
                 topLeft = androidx.compose.ui.geometry.Offset(x + 2f, height - downHeight),
                 size = androidx.compose.ui.geometry.Size((barWidth / 2f) - 2f, downHeight),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
             )
-            
+
             drawRoundRect(
                 color = androidx.compose.ui.graphics.Color(0xFF5C6BC0),
                 topLeft = androidx.compose.ui.geometry.Offset(x + (barWidth / 2f), height - upHeight),
@@ -924,9 +949,9 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
     var currentTheme by remember { mutableStateOf(themeManager.currentTheme) }
     var showAboutSheet by remember { mutableStateOf(false) }
     val settingsManager = remember { SettingsManager.getInstance(context) }
-    
+
     val speedTestReminder by settingsManager.speedTestReminderFlow.collectAsStateWithLifecycle()
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -979,12 +1004,12 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
         SettingsCard(title = "Notifications", icon = Icons.Default.Notifications) {
             ToggleRow("Speed Test Reminder", speedTestReminder, onToggleChange = { settingsManager.setSpeedTestReminder(it) })
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Help & Support
         SettingsCard(
-            title = "Help & Support", 
+            title = "Help & Support",
             icon = Icons.Default.Star,
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
@@ -995,15 +1020,15 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
                 }
             }
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         SettingsCard(
-            title = "About", 
+            title = "About",
             icon = Icons.Default.Info,
             onClick = { showAboutSheet = true }
         )
-        
+
         if (showAboutSheet) {
             AboutBottomSheet(onDismiss = { showAboutSheet = false })
         }
@@ -1052,8 +1077,8 @@ private fun RowScope.ThemeOptionButton(text: String, isSelected: Boolean, onClic
 
 @Composable
 fun SettingsCard(
-    title: String, 
-    icon: androidx.compose.ui.graphics.vector.ImageVector, 
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: (() -> Unit)? = null,
     content: @Composable (() -> Unit)? = null
 ) {
@@ -1096,7 +1121,7 @@ fun ToggleRow(label: String, checked: Boolean, onToggleChange: (Boolean) -> Unit
             Text(label, style = Typography.bodyMedium, color = TextPrimary)
         }
         Switch(
-            checked = checked, 
+            checked = checked,
             onCheckedChange = onToggleChange,
             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = GradientStart)
         )
@@ -1143,7 +1168,7 @@ fun CarrierInfoCard(
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if (networkInfo.networkType.contains("LTE")) "LTE" 
+                        text = if (networkInfo.networkType.contains("LTE")) "LTE"
                                else if (networkInfo.networkType.contains("5G")) "5G"
                                else "4G",
                         style = Typography.labelMedium.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
@@ -1151,9 +1176,9 @@ fun CarrierInfoCard(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -1174,14 +1199,14 @@ fun CarrierInfoCard(
                     fontWeight = FontWeight.Medium
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        if (networkInfo.isLocationEnabled) TextTeal.copy(alpha = 0.1f) 
-                        else Color.Red.copy(alpha = 0.1f), 
+                        if (networkInfo.isLocationEnabled) TextTeal.copy(alpha = 0.1f)
+                        else Color.Red.copy(alpha = 0.1f),
                         RoundedCornerShape(8.dp)
                     )
                     .padding(8.dp),
@@ -1204,9 +1229,9 @@ fun CarrierInfoCard(
                     color = if (networkInfo.isLocationEnabled) TextTeal else Color.Red.copy(alpha = 0.7f)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             InfoRow(label = "Network", value = networkInfo.networkType.ifEmpty { "--" })
             InfoRow(label = "Band", value = band)
             InfoRow(label = "MCC/MNC", value = networkInfo.operatorCode)
@@ -1230,7 +1255,7 @@ private fun InfoRow(label: String, value: String) {
 
 @Composable
 fun SignalStrengthCard(
-    modifier: Modifier = Modifier, 
+    modifier: Modifier = Modifier,
     networkInfo: NetworkInfo,
     hasPermission: Boolean = true,
     onRequestPermission: () -> Unit = {}
@@ -1239,7 +1264,7 @@ fun SignalStrengthCard(
     val signalLevel = getSignalLevelName(signal.level)
     val signalColor = getSignalLevelColor(signal.level)
     val barsCount = getBarsCount(signal.level)
-    
+
     val isSignalAvailable = signal.rsrp != 0 || signal.rssi != 0
 
     Box(
@@ -1251,9 +1276,9 @@ fun SignalStrengthCard(
         Column(modifier = Modifier.fillMaxWidth()) {
             Text("SIGNAL", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
             Text("Reference Signal", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1262,7 +1287,7 @@ fun SignalStrengthCard(
             ) {
                 SignalBars(barsCount)
             }
-            
+
             if (!hasPermission) {
                 val errorColor = if (globalIsDarkTheme) Color(0xFFFF5252) else Color(0xFFD32F2F)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1336,16 +1361,16 @@ fun SignalStrengthCard(
                     color = signalColor,
                     fontWeight = FontWeight.Bold
                 )
-                
+
                 Text(
                     text = signalLevel,
                     style = Typography.labelMedium.copy(fontSize = 11.sp),
                     color = signalColor,
                     fontWeight = FontWeight.Medium
                 )
-                
+
                 Spacer(modifier = Modifier.weight(1f))
-                
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1538,9 +1563,9 @@ fun DataSpeedCard(speedInfo: SpeedInfo, context: Context) {
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(20.dp))
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SpeedColumn(
                     icon = Icons.Default.KeyboardArrowDown,
@@ -1557,9 +1582,9 @@ fun DataSpeedCard(speedInfo: SpeedInfo, context: Context) {
                     modifier = Modifier.weight(1f)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1570,16 +1595,16 @@ fun DataSpeedCard(speedInfo: SpeedInfo, context: Context) {
                         )
                     )
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 InfoChip(label = "Downloaded", value = formatBytes(speedInfo.totalDownloaded))
                 InfoChip(label = "Uploaded", value = formatBytes(speedInfo.totalUploaded))
             }
         }
     }
-    
+
     if (showInfoSheet) {
         SpeedInfoBottomSheet(
             speedInfo = speedInfo,
@@ -1632,7 +1657,7 @@ private fun InfoChip(label: String, value: String) {
 @Composable
 private fun SpeedInfoBottomSheet(speedInfo: SpeedInfo, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
-    
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1646,14 +1671,14 @@ private fun SpeedInfoBottomSheet(speedInfo: SpeedInfo, onDismiss: () -> Unit) {
         ) {
             Text("Speed Information", style = Typography.titleLarge.copy(fontSize = 22.sp), color = TextPrimary, fontWeight = FontWeight.Bold)
             Text("Detailed network metrics", style = Typography.bodyMedium.copy(fontSize = 14.sp), color = TextSecondary)
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             InfoRowDetail(label = "Download Speed", value = formatSpeed(speedInfo.downloadSpeed), unit = "Mbps")
             InfoRowDetail(label = "Upload Speed", value = formatSpeed(speedInfo.uploadSpeed), unit = "Mbps")
             InfoRowDetail(label = "Total Downloaded", value = formatBytes(speedInfo.totalDownloaded), unit = "")
             InfoRowDetail(label = "Total Uploaded", value = formatBytes(speedInfo.totalUploaded), unit = "", isLast = true)
-            
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -1729,21 +1754,21 @@ private fun SignalHistoryChart(history: List<Int>, modifier: Modifier = Modifier
         }
         return
     }
-    
+
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val minRsrp = -140f
         val maxRsrp = -60f
         val range = maxRsrp - minRsrp
-        
+
         val points = history.mapIndexed { index, rsrp ->
             val x = (index.toFloat() / (history.size - 1).coerceAtLeast(1)) * width
             val normalizedY = ((rsrp - minRsrp) / range).coerceIn(0f, 1f)
             val y = height - (normalizedY * height)
             Offset(x, y)
         }
-        
+
         if (points.size >= 2) {
             val path = androidx.compose.ui.graphics.Path().apply {
                 moveTo(points[0].x, points[0].y)
@@ -1751,27 +1776,27 @@ private fun SignalHistoryChart(history: List<Int>, modifier: Modifier = Modifier
                     lineTo(points[i].x, points[i].y)
                 }
             }
-            
+
             val fillPath = androidx.compose.ui.graphics.Path().apply {
                 addPath(path)
                 lineTo(points.last().x, height)
                 lineTo(points.first().x, height)
                 close()
             }
-            
+
             drawPath(
                 path = fillPath,
                 brush = Brush.verticalGradient(
                     colors = listOf(color.copy(alpha = 0.4f), Color.Transparent)
                 )
             )
-            
+
             drawPath(
                 path = path,
                 color = color,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
             )
-            
+
             for (point in points) {
                 drawCircle(
                     color = color,
@@ -1789,9 +1814,9 @@ private fun SpeedTestBarChart(
     onTestClick: (SpeedTestEntity) -> Unit
 ) {
     if (speedTests.isEmpty()) return
-    
+
     val maxSpeed = speedTests.maxOfOrNull { maxOf(it.downloadSpeed, it.uploadSpeed) } ?: 1.0
-    
+
     Column {
         Row(
             modifier = Modifier.fillMaxWidth().height(80.dp),
@@ -1810,7 +1835,7 @@ private fun SpeedTestBarChart(
                     ) {
                         val downloadHeight = if (maxSpeed > 0) (test.downloadSpeed / maxSpeed).toFloat() else 0f
                         val uploadHeight = if (maxSpeed > 0) (test.uploadSpeed / maxSpeed).toFloat() else 0f
-                        
+
                         Box(
                             modifier = Modifier
                                 .width(8.dp)
@@ -1899,17 +1924,17 @@ private fun SpeedTestDetailSheet(
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Text(
                     formatDateTime(test.timestamp),
                     style = Typography.labelMedium.copy(fontSize = 12.sp),
                     color = TextSecondary
                 )
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -1929,7 +1954,7 @@ private fun SpeedTestDetailSheet(
                         Text("Mbps", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
                         Text("Download", style = Typography.labelMedium.copy(fontSize = 9.sp), color = TextSecondary)
                     }
-                    
+
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             Icons.Default.KeyboardArrowUp,
@@ -1946,9 +1971,9 @@ private fun SpeedTestDetailSheet(
                         Text("Upload", style = Typography.labelMedium.copy(fontSize = 9.sp), color = TextSecondary)
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1966,7 +1991,7 @@ private fun SpeedTestDetailSheet(
                             color = TextTeal
                         )
                     }
-                    
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.background(TextPrimary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
@@ -2086,7 +2111,7 @@ fun SpeedometerProgress(
     modifier: Modifier = Modifier
 ) {
     var currentSpeed by remember { mutableFloatStateOf(0f) }
-    
+
     LaunchedEffect(isTesting, phase, speed) {
         if (isTesting) {
             // During testing, show the real speed being measured (0 initially)
@@ -2095,18 +2120,18 @@ fun SpeedometerProgress(
             currentSpeed = speed.toFloat()
         }
     }
-    
+
     val animatedSpeed by animateFloatAsState(
         targetValue = currentSpeed,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
         label = "speed_anim"
     )
-    
+
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 16.dp.toPx()
             val radius = size.minDimension / 2f - strokeWidth
-            
+
             // Background arc
             drawArc(
                 color = NeumorphicDarkShadow.copy(alpha=0.3f),
@@ -2117,11 +2142,11 @@ fun SpeedometerProgress(
                 topLeft = Offset(center.x - radius, center.y - radius),
                 size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
             )
-            
+
             val maxSpeed = 150f
             val progressPercentage = (animatedSpeed / maxSpeed).coerceIn(0f, 1f)
             val sweep = 270f * progressPercentage
-            
+
             // Progress arc
             if (sweep > 0) {
                 drawArc(
@@ -2139,7 +2164,7 @@ fun SpeedometerProgress(
                 )
             }
         }
-        
+
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = String.format("%.1f", animatedSpeed),
@@ -2149,7 +2174,7 @@ fun SpeedometerProgress(
             )
             val unit = if (phase == "PING") "ms" else "Mbps"
             Text(unit, style = Typography.labelMedium, color = TextSecondary)
-            
+
             if (isTesting && phase != "IDLE" && phase != "DONE") {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("TESTING $phase...", style = Typography.labelSmall, color = TextTeal, fontWeight = FontWeight.SemiBold)
@@ -2163,7 +2188,7 @@ fun SpeedometerProgress(
 private fun AboutBottomSheet(onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
     val context = LocalContext.current
-    
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -2185,13 +2210,13 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
             ) {
                 Icon(Icons.Default.Build, contentDescription = null, tint = GradientStart, modifier = Modifier.size(40.dp))
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
             Text("Force LTE Only", style = Typography.titleLarge.copy(fontSize = 22.sp), color = TextPrimary, fontWeight = FontWeight.Bold)
             Text("Version 1.5.0", style = Typography.bodyMedium.copy(fontSize = 14.sp), color = TextSecondary)
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2211,24 +2236,24 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             SettingsActionRow("Developer Website", onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/"))
                 context.startActivity(intent)
             })
-            
+
             SettingsActionRow("Privacy Policy", onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/privacy"))
                 context.startActivity(intent)
             })
-            
+
             SettingsActionRow("Terms of Service", onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/terms"))
                 context.startActivity(intent)
             })
-            
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -2238,7 +2263,7 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
 @Composable
 private fun HowToUseBottomSheet(onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
-    
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -2253,38 +2278,38 @@ private fun HowToUseBottomSheet(onDismiss: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "How to Use", 
-                style = Typography.titleLarge.copy(fontSize = 22.sp), 
-                color = TextPrimary, 
+                "How to Use",
+                style = Typography.titleLarge.copy(fontSize = 22.sp),
+                color = TextPrimary,
                 fontWeight = FontWeight.Bold
             )
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             HowToStep(
                 number = "1",
                 title = "Open Hidden Settings",
                 description = "Tap the 'FORCE 4G MODE' button on the home screen to open Android's hidden RadioInfo menu."
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             HowToStep(
                 number = "2",
                 title = "Set Network Type",
                 description = "Scroll down to 'Set Preferred Network Type' and select your desired mode."
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             HowToStep(
                 number = "3",
                 title = "Force 4G or 5G",
                 description = "Select 'LTE Only' to force 4G, or 'NR Only' to force 5G. Note: NR requires hardware support."
             )
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2336,7 +2361,7 @@ private fun HowToStep(number: String, title: String, description: String) {
 fun DeviceCodesBottomSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState()
-    
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -2362,7 +2387,7 @@ fun DeviceCodesBottomSheet(onDismiss: () -> Unit) {
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             SecretCodeItem(brand = "Samsung", code = "*#0011#", context = context)
             SecretCodeItem(brand = "Samsung Band Selection", code = "*#*#2263#*#*", context = context)
             SecretCodeItem(brand = "Honor / Huawei", code = "*#*#6130#*#*", context = context)
@@ -2381,7 +2406,7 @@ fun SecretCodeItem(brand: String, code: String, context: Context) {
             .background(NeumorphicBackground, RoundedCornerShape(16.dp))
             .clickable {
                 Toast.makeText(context, "Please manually type: $code", Toast.LENGTH_LONG).show()
-                
+
                 try {
                     val dialIntent = Intent(Intent.ACTION_DIAL)
                     dialIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
