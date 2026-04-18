@@ -58,6 +58,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import java.util.concurrent.TimeUnit
+import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.graphics.nativeCanvas
 
 class MainActivity : ComponentActivity() {
     private lateinit var themeManager: ThemeManager
@@ -105,7 +110,24 @@ fun DashboardScreen(themeManager: ThemeManager) {
     var storedSpeedTests by remember { mutableStateOf<List<SpeedTestEntity>>(emptyList()) }
     var storedPingTests by remember { mutableStateOf<List<PingTestEntity>>(emptyList()) }
 
+    val gameServers = remember {
+        mutableStateListOf(
+            GameServer("Singapore", "203.126.118.38"),
+            GameServer("India", "13.232.0.253"),
+            GameServer("Middle East", "185.25.183.1"),
+            GameServer("Europe", "146.66.152.1"),
+            GameServer("US East", "208.78.164.1"),
+            GameServer("Australia", "103.10.125.1"),
+            GameServer("Japan", "155.133.239.1"),
+            GameServer("Google DNS", "8.8.8.8")
+        )
+    }
+
     val telephonyService = remember { TelephonyService(context) }
+    
+    LaunchedEffect(Unit) {
+        telephonyService.loadInitialGamePingHistory(gameServers)
+    }
     val intent = (context as? ComponentActivity)?.intent
 
     LaunchedEffect(intent) {
@@ -219,7 +241,8 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 networkInfo = networkInfo,
                 signalHistory = storedSignalHistory,
                 speedTests = storedSpeedTests,
-                pingTests = storedPingTests
+                pingTests = storedPingTests,
+                gameServers = gameServers
             )
             2 -> ToolsTab(
                 telephonyService = telephonyService,
@@ -228,6 +251,7 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 isPingTestRunning = isPingTestRunning,
                 speedTestResult = speedTestResult,
                 pingTestResult = pingTestResult,
+                gameServers = gameServers,
                 onSpeedTestClick = {
                     if (!isSpeedTestRunning) {
                         isSpeedTestRunning = true
@@ -483,6 +507,8 @@ fun HomeTab(
             Spacer(modifier = Modifier.height(32.dp))
 
             DataSpeedCard(speedInfo = networkInfo.speedInfo, context = context)
+            
+            Spacer(modifier = Modifier.height(70.dp))
         }
 
         if (showDeviceCodesSheet) {
@@ -500,7 +526,8 @@ fun AnalyticsTab(
     networkInfo: NetworkInfo,
     signalHistory: List<SignalHistoryEntity>,
     speedTests: List<SpeedTestEntity>,
-    pingTests: List<PingTestEntity>
+    pingTests: List<PingTestEntity>,
+    gameServers: List<GameServer>
 ) {
     val scrollState = rememberScrollState()
     val currentRsrp = networkInfo.signalStrength.rsrp
@@ -522,6 +549,10 @@ fun AnalyticsTab(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(24.dp))
+
+        GlobalServerLatencyCard(gameServers)
+        
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Signal History Card
         AnalyticsCard(
@@ -605,6 +636,8 @@ fun AnalyticsTab(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(70.dp))
     }
 }
 
@@ -654,11 +687,27 @@ fun ToolsTab(
     isPingTestRunning: Boolean,
     speedTestResult: SpeedTestResult?,
     pingTestResult: PingTestResult?,
+    gameServers: List<GameServer>,
     onSpeedTestClick: () -> Unit,
     onPingTestClick: () -> Unit,
     context: Context
 ) {
     val scrollState = rememberScrollState()
+    
+    var localIp by remember { mutableStateOf("Loading...") }
+    var publicIp by remember { mutableStateOf("Loading...") }
+    var wifiSpeed by remember { mutableStateOf("Loading...") }
+    var showApnButton by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        localIp = NetworkInfoHelper.getLocalIpAddress()
+        wifiSpeed = NetworkInfoHelper.getWifiLinkSpeed(context)
+        publicIp = NetworkInfoHelper.getPublicIpAddress()
+        
+        // Check if APN Settings intent is resolvable
+        showApnButton = RadioInfoHelper.canResolveIntent(context, Intent(Settings.ACTION_APN_SETTINGS))
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -674,6 +723,14 @@ fun ToolsTab(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(24.dp))
+
+        NetworkInfoCard(localIp = localIp, publicIp = publicIp, wifiSpeed = wifiSpeed)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+
+        GameServersPingCard(gameServers, telephonyService)
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Speed Test Card
         Box(
@@ -827,33 +884,41 @@ fun ToolsTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         // APN Settings Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
-                .background(NeumorphicBackground, RoundedCornerShape(24.dp))
-                .padding(20.dp)
-                .clickable {
-                    val intent = Intent(Settings.ACTION_APN_SETTINGS)
-                    context.startActivity(intent)
-                }
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Build, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("APN SETTINGS", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
-                        Text("Network Configuration", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
+        if (showApnButton) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
+                    .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+                    .padding(20.dp)
+                    .clickable {
+                        try {
+                            val intent = Intent(Settings.ACTION_APN_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "APN settings blocked on this device", Toast.LENGTH_SHORT).show()
+                        }
                     }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Build, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("APN SETTINGS", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
+                            Text("Network Configuration", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary)
                 }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary)
             }
         }
+        
+        Spacer(modifier = Modifier.height(70.dp))
     }
 }
 
@@ -2429,5 +2494,314 @@ fun SecretCodeItem(brand: String, code: String, context: Context) {
             tint = GradientStart,
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+@Composable
+fun NetworkInfoCard(localIp: String, publicIp: String, wifiSpeed: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
+            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+            .padding(20.dp)
+    ) {
+        Column {
+            Text("NETWORK INFORMATION", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            NetworkInfoRow(icon = Icons.Default.Public, label = "Public IP", value = publicIp)
+            Divider(modifier = Modifier.padding(vertical = 12.dp), color = TextSecondary.copy(alpha = 0.1f))
+            NetworkInfoRow(icon = Icons.Default.Lan, label = "Local IP", value = localIp)
+            Divider(modifier = Modifier.padding(vertical = 12.dp), color = TextSecondary.copy(alpha = 0.1f))
+            NetworkInfoRow(icon = Icons.Default.Wifi, label = "Wi-Fi Speed", value = wifiSpeed)
+        }
+    }
+}
+
+@Composable
+private fun NetworkInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = icon, contentDescription = null, tint = GradientStart, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = label, style = Typography.bodyMedium, color = TextPrimary)
+        }
+        Text(text = value, style = Typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+    }
+}
+
+val GameServerColors = listOf(
+    Color(0xFF4CAF50), // Singapore
+    Color(0xFF2196F3), // India
+    Color(0xFFFF9800), // Middle East
+    Color(0xFFE91E63), // Europe
+    Color(0xFF9C27B0), // US East
+    Color(0xFF00BCD4), // Australia
+    Color(0xFFFF5722), // Japan
+    Color(0xFF607D8B)  // Google DNS
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GameServersPingCard(gameServers: List<GameServer>, telephonyService: TelephonyService) {
+    var showSheet by remember { mutableStateOf(false) }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
+            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+            .clickable { showSheet = true }
+            .padding(20.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Gamepad, contentDescription = null, tint = GradientStart, modifier = Modifier.size(32.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text("GAMING PING ANALYZER", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
+                    Text("Regional Server Test", style = Typography.titleMedium.copy(fontSize = 18.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+        }
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            containerColor = NeumorphicBackground,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = TextSecondary.copy(alpha = 0.3f)) }
+        ) {
+            GameServersBottomSheetContent(gameServers, telephonyService)
+        }
+    }
+}
+
+@Composable
+fun GameServersBottomSheetContent(gameServers: List<GameServer>, telephonyService: TelephonyService) {
+    val scope = rememberCoroutineScope()
+    var isAnalyzing by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .padding(bottom = 32.dp)
+    ) {
+        Text("Regional Game Servers", style = Typography.titleLarge, color = TextPrimary)
+        Text("Check real-time latency for major gaming hubs", style = Typography.bodyMedium, color = TextSecondary)
+        
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(if (isAnalyzing) SolidColor(NeumorphicDarkShadow) else Brush.linearGradient(GradientColors))
+                .clickable(enabled = !isAnalyzing) {
+                    isAnalyzing = true
+                    scope.launch {
+                        telephonyService.runGameServerAnalysis(gameServers)
+                        isAnalyzing = false
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (isAnalyzing) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            } else {
+                Text("START ANALYSIS", style = Typography.labelLarge, color = Color.White)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        gameServers.forEach { server ->
+            GameServerItem(server)
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+fun GameServerItem(server: GameServer) {
+    val pingColor = when {
+        server.pingMs < 0 -> TextSecondary
+        server.pingMs < 80 -> Color(0xFF4CAF50)
+        server.pingMs < 150 -> Color(0xFFFF9800)
+        else -> Color(0xFFF44336)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .neumorphic(cornerRadius = 16.dp, elevation = 2.dp)
+            .background(NeumorphicBackground, RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(server.name, style = Typography.titleMedium, color = TextPrimary)
+            Text(server.status, style = Typography.labelSmall, color = TextSecondary)
+        }
+        
+        Text(
+            if (server.pingMs < 0) "-- ms" else "${server.pingMs} ms",
+            style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = pingColor
+        )
+    }
+}
+
+@Composable
+fun GlobalServerLatencyCard(gameServers: List<GameServer>) {
+    AnalyticsCard(
+        title = "GLOBAL SERVER LATENCY",
+        subtitle = "Multi-region historical trends"
+    ) {
+        val activeServers = gameServers.filter { it.pingHistory.size >= 2 }
+        
+        if (activeServers.isNotEmpty()) {
+            MultiLinePingChart(activeServers)
+            Spacer(modifier = Modifier.height(24.dp))
+            ChartLegend(activeServers)
+        } else {
+            Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                Text("Gathering more data... Run analysis in Tools to view history", style = Typography.bodyMedium, color = TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+fun MultiLinePingChart(servers: List<GameServer>) {
+    val maxPingValue = (servers.flatMap { it.pingHistory }.maxOrNull() ?: 200).toFloat().coerceAtLeast(100f)
+    val maxPing = (Math.ceil(maxPingValue / 100.0) * 100.0).toFloat()
+    
+    val paddingLeft = 45.dp
+    val paddingBottom = 20.dp
+    
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val textPaint = remember {
+        android.graphics.Paint().apply {
+            color = android.graphics.Color.GRAY
+            textAlign = android.graphics.Paint.Align.RIGHT
+            textSize = density.run { 10.sp.toPx() }
+            isAntiAlias = true
+        }
+    }
+
+    Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+        val width = size.width
+        val height = size.height
+        val leftOffset = paddingLeft.toPx()
+        val bottomOffset = paddingBottom.toPx()
+        val chartWidth = width - leftOffset
+        val chartHeight = height - bottomOffset
+        
+        // Draw Y-axis labels and horizontal grid lines
+        val stepCount = (maxPing / 100).toInt()
+        for (i in 0..stepCount) {
+            val pingVal = i * 100
+            val y = chartHeight - (pingVal.toFloat() / maxPing * chartHeight)
+            
+            // Grid line
+            drawLine(
+                color = TextSecondary.copy(alpha = 0.1f),
+                start = Offset(leftOffset, y),
+                end = Offset(width, y),
+                strokeWidth = 1.dp.toPx()
+            )
+            
+            // Y-axis label
+            drawContext.canvas.nativeCanvas.drawText(
+                "${pingVal}ms",
+                leftOffset - 8.dp.toPx(),
+                y + 4.dp.toPx(),
+                textPaint
+            )
+        }
+
+        // Horizontal baseline
+        drawLine(
+            color = TextSecondary.copy(alpha = 0.3f),
+            start = Offset(leftOffset, chartHeight),
+            end = Offset(width, chartHeight),
+            strokeWidth = 1.dp.toPx()
+        )
+
+        servers.forEachIndexed { index, server ->
+            val points = server.pingHistory
+            if (points.size < 2) return@forEachIndexed
+            
+            val color = GameServerColors[index % GameServerColors.size]
+            val path = androidx.compose.ui.graphics.Path()
+            
+            points.forEachIndexed { pIndex, ping ->
+                val x = leftOffset + pIndex * (chartWidth / (points.size - 1))
+                val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
+                
+                if (pIndex == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            
+            // Draw path
+            drawPath(
+                path = path,
+                color = color,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 3.dp.toPx(), 
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round
+                )
+            )
+            
+            // Draw nodes
+            points.forEachIndexed { pIndex, ping ->
+                val x = leftOffset + pIndex * (chartWidth / (points.size - 1))
+                val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
+                
+                drawCircle(
+                    color = color,
+                    center = Offset(x, y),
+                    radius = 3.dp.toPx()
+                )
+                // Outer circle for better visibility
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.5f),
+                    center = Offset(x, y),
+                    radius = 4.dp.toPx(),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ChartLegend(servers: List<GameServer>) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        servers.forEachIndexed { index, server ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(8.dp).background(GameServerColors[index % GameServerColors.size], CircleShape))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(server.name, style = Typography.labelSmall, color = TextSecondary)
+            }
+        }
     }
 }

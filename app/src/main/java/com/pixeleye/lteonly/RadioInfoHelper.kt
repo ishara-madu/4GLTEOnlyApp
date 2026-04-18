@@ -3,7 +3,6 @@ package com.pixeleye.lteonly
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 
 object RadioInfoHelper {
 
@@ -39,5 +38,12 @@ object RadioInfoHelper {
         }
 
        throw Exception("Radio Info menu not found or access blocked")
+    }
+
+    /**
+     * Checks if a given intent can be resolved by the system.
+     */
+    fun canResolveIntent(context: Context, intent: Intent): Boolean {
+        return intent.resolveActivity(context.packageManager) != null
     }
 }

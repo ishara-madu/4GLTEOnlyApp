@@ -14,9 +14,9 @@ object AdManager {
     private const val TAG = "AdManager"
     
     // Test Ad Unit IDs
-    private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-LOCAL_ID_HERE"
+    private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
     const val APP_OPEN_AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
-    const val BANNER_AD_UNIT_ID = "ca-app-pub-LOCAL_ID_HERE"
+    const val BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
 
     private var interstitialAd: InterstitialAd? = null
     private var isAdLoading = false

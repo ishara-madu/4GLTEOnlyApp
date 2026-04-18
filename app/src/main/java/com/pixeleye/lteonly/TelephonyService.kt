@@ -737,6 +737,67 @@ class TelephonyService(private val context: Context) {
         }
     }
 
+    suspend fun runGameServerAnalysis(servers: List<GameServer>) = withContext(Dispatchers.IO) {
+        val database = AppDatabase.getDatabase(context)
+        servers.forEach { server ->
+            server.status = "Testing..."
+            val latency = measurePingToIp(server.ip)
+            
+            server.pingMs = latency
+            server.status = if (latency > 0) "Complete" else "Failed"
+            
+            if (latency > 0) {
+                val entity = GamePingEntity(
+                    serverIp = server.ip,
+                    pingMs = latency,
+                    timestamp = System.currentTimeMillis()
+                )
+                database.gamePingDao().insert(entity)
+                database.gamePingDao().deleteOldPings(server.ip)
+                
+                // Refresh local history state
+                val history = database.gamePingDao().getRecentPings(server.ip)
+                withContext(Dispatchers.Main) {
+                    server.pingHistory.clear()
+                    server.pingHistory.addAll(history)
+                }
+            }
+        }
+    }
+
+    private fun measurePingToIp(ip: String): Int {
+        return try {
+            val process = Runtime.getRuntime().exec("/system/bin/ping -c 1 -W 2 $ip")
+            val reader = process.inputStream.bufferedReader()
+            var latency = -1
+            reader.useLines { lines ->
+                lines.forEach { line ->
+                    if (line.contains("time=")) {
+                        val timeMatch = Regex("time=(\\d+\\.?\\d*)").find(line)
+                        timeMatch?.let {
+                            latency = it.groupValues[1].toDouble().toInt()
+                        }
+                    }
+                }
+            }
+            process.waitFor()
+            latency
+        } catch (e: Exception) {
+            -1
+        }
+    }
+    
+    suspend fun loadInitialGamePingHistory(servers: List<GameServer>) = withContext(Dispatchers.IO) {
+        val database = AppDatabase.getDatabase(context)
+        servers.forEach { server ->
+            val history = database.gamePingDao().getRecentPings(server.ip)
+            withContext(Dispatchers.Main) {
+                server.pingHistory.clear()
+                server.pingHistory.addAll(history)
+            }
+        }
+    }
+
     companion object {
         val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(

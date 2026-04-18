@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         SignalHistoryEntity::class,
         DataUsageEntity::class,
         SpeedTestEntity::class,
-        PingTestEntity::class
+        PingTestEntity::class,
+        GamePingEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,6 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun dataUsageDao(): DataUsageDao
     abstract fun speedTestDao(): SpeedTestDao
     abstract fun pingTestDao(): PingTestDao
+    abstract fun gamePingDao(): GamePingDao
     
     companion object {
         @Volatile
