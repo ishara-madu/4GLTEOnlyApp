@@ -1,6 +1,8 @@
 package com.pixeleye.lteonly
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -315,9 +317,13 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FooterLink("Terms of Use") { /* Link */ }
+                        FooterLink("Terms of Use") {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/terms")))
+                        }
                         Text(" • ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
-                        FooterLink("Privacy Policy") { /* Link */ }
+                        FooterLink("Privacy Policy") {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/privacy")))
+                        }
                         Text(" • ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
                         FooterLink("Restore Purchases") {
                             isPurchasing = true

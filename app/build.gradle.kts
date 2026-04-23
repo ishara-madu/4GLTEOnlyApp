@@ -22,8 +22,8 @@ android {
         applicationId = "com.pixeleye.lteonly"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.6"
+        versionCode = 7
+        versionName = "1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -88,7 +88,6 @@ dependencies {
     implementation(libs.play.services.ads)
     implementation("com.google.android.play:review-ktx:2.0.1")
     implementation("com.revenuecat.purchases:purchases:10.2.0")
-    implementation("com.revenuecat.purchases:purchases-ui:10.2.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

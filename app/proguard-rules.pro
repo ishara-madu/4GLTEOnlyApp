@@ -62,3 +62,10 @@
     java.lang.Object writeReplace();
     java.lang.Object readResolve();
 }
+# --- RevenueCat ---
+-keep class com.revenuecat.purchases.** { *; }
+-dontwarn com.revenuecat.purchases.**
+
+# --- Google Play Billing ---
+-keep class com.android.billingclient.** { *; }
+-dontwarn com.android.billingclient.**

@@ -17,6 +17,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -46,6 +47,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -57,6 +59,7 @@ import androidx.work.*
 import com.pixeleye.lteonly.ui.theme.*
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.getCustomerInfoWith
+import com.google.android.play.core.review.ReviewManagerFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
@@ -110,7 +113,6 @@ fun DashboardScreen(themeManager: ThemeManager) {
     var speedTestPhase by remember { mutableStateOf("IDLE") }
     var pingTestResult by remember { mutableStateOf<PingTestResult?>(null) }
     var hasSavedInitialSignal by remember { mutableStateOf(false) }
-    var isReturningFromSettings by rememberSaveable { mutableStateOf(false) }
 
     var storedSignalHistory by remember { mutableStateOf<List<SignalHistoryEntity>>(emptyList()) }
     var storedDataUsage by remember { mutableStateOf<List<DataUsageEntity>>(emptyList()) }
@@ -181,22 +183,6 @@ fun DashboardScreen(themeManager: ThemeManager) {
     val settingsManager = remember { SettingsManager.getInstance(context) }
     val speedTestReminder by settingsManager.speedTestReminderFlow.collectAsStateWithLifecycle()
 
-    // Lifecycle observer to trigger review when returning from hidden settings
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && isReturningFromSettings) {
-                isReturningFromSettings = false
-                scope.launch {
-                    delay(1500) // Give the user 1.5 seconds to settle in after returning
-                    ReviewHelper.askForReview(context)
-                }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
 
     var showHowToUseSheet by remember { mutableStateOf(false) }
 
@@ -243,7 +229,6 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 hasPermission = hasPermission,
                 isUserPro = isUserPro,
                 onHowToUseClick = { showHowToUseSheet = true },
-                onHiddenMenuOpened = { isReturningFromSettings = true },
                 onUpgradeClick = { showPaywall = true }
             )
             1 -> AnalyticsTab(
@@ -438,11 +423,33 @@ fun HomeTab(
     hasPermission: Boolean = true,
     isUserPro: Boolean = false,
     onHowToUseClick: () -> Unit = {},
-    onHiddenMenuOpened: () -> Unit = {},
     onUpgradeClick: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     var showDeviceCodesSheet by remember { mutableStateOf(false) }
+    var pendingReviewTrigger by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && pendingReviewTrigger) {
+                pendingReviewTrigger = false
+                val activity = context as? android.app.Activity
+                if (activity != null) {
+                    val manager = ReviewManagerFactory.create(context)
+                    val request = manager.requestReviewFlow()
+                    request.addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            val reviewInfo = task.result
+                            manager.launchReviewFlow(activity, reviewInfo)
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -507,11 +514,10 @@ fun HomeTab(
             Spacer(modifier = Modifier.height(32.dp))
 
             MainForce4GButton(onClick = {
+                pendingReviewTrigger = true
                 val activity = context as? android.app.Activity
                 val openInfo = {
                     try {
-                        // Notify that hidden menu is being opened
-                        onHiddenMenuOpened()
                         RadioInfoHelper.openRadioInfo(context)
                     } catch (e: Exception) {
                         showDeviceCodesSheet = true
@@ -2443,12 +2449,16 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
                     .background(NeumorphicBackground, RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Build, contentDescription = null, tint = GradientStart, modifier = Modifier.size(40.dp))
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                    contentDescription = "App Icon",
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp))
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
             Text("Force LTE Only", style = Typography.titleLarge.copy(fontSize = 22.sp), color = TextPrimary, fontWeight = FontWeight.Bold)
-            Text("Version 1.5.0", style = Typography.bodyMedium.copy(fontSize = 14.sp), color = TextSecondary)
+            Text("Version ${BuildConfig.VERSION_NAME}", style = Typography.bodyMedium.copy(fontSize = 14.sp), color = TextSecondary)
 
             Spacer(modifier = Modifier.height(32.dp))
 
