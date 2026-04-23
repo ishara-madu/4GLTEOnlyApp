@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -54,6 +55,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.work.*
 import com.pixeleye.lteonly.ui.theme.*
+import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.getCustomerInfoWith
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
@@ -94,6 +97,10 @@ fun DashboardScreen(themeManager: ThemeManager) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
     val context = LocalContext.current
+
+    // Pro state from RevenueCat
+    val isUserPro by ProStateManager.isUserPro.collectAsStateWithLifecycle()
+    var showPaywall by remember { mutableStateOf(false) }
 
     var hasPermission by remember { mutableStateOf(false) }
     var networkInfo by remember { mutableStateOf(NetworkInfo()) }
@@ -234,15 +241,19 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 telephonyService = telephonyService,
                 context = context,
                 hasPermission = hasPermission,
+                isUserPro = isUserPro,
                 onHowToUseClick = { showHowToUseSheet = true },
-                onHiddenMenuOpened = { isReturningFromSettings = true }
+                onHiddenMenuOpened = { isReturningFromSettings = true },
+                onUpgradeClick = { showPaywall = true }
             )
             1 -> AnalyticsTab(
                 networkInfo = networkInfo,
                 signalHistory = storedSignalHistory,
                 speedTests = storedSpeedTests,
                 pingTests = storedPingTests,
-                gameServers = gameServers
+                gameServers = gameServers,
+                isUserPro = isUserPro,
+                onUpgradeClick = { showPaywall = true }
             )
             2 -> ToolsTab(
                 telephonyService = telephonyService,
@@ -252,6 +263,8 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 speedTestResult = speedTestResult,
                 pingTestResult = pingTestResult,
                 gameServers = gameServers,
+                isUserPro = isUserPro,
+                onUpgradeClick = { showPaywall = true },
                 onSpeedTestClick = {
                     if (!isSpeedTestRunning) {
                         isSpeedTestRunning = true
@@ -308,11 +321,19 @@ fun DashboardScreen(themeManager: ThemeManager) {
         Column(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            BannerAd()
+            // Hide banner ad for pro users
+            if (!isUserPro) {
+                BannerAd()
+            }
             NeumorphicBottomBar(
                 selectedTab = selectedTab,
                 onTabSelected = { selectedTab = it }
             )
+        }
+
+        // Paywall dialog
+        if (showPaywall) {
+            PremiumUpgradeScreen(onDismiss = { showPaywall = false })
         }
 
         if (showHowToUseSheet) {
@@ -415,8 +436,10 @@ fun HomeTab(
     telephonyService: TelephonyService,
     context: Context,
     hasPermission: Boolean = true,
+    isUserPro: Boolean = false,
     onHowToUseClick: () -> Unit = {},
-    onHiddenMenuOpened: () -> Unit = {}
+    onHiddenMenuOpened: () -> Unit = {},
+    onUpgradeClick: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     var showDeviceCodesSheet by remember { mutableStateOf(false) }
@@ -495,7 +518,7 @@ fun HomeTab(
                     }
                 }
 
-                if (activity != null) {
+                if (activity != null && !isUserPro) {
                     AdManager.showInterstitial(activity) {
                         openInfo()
                     }
@@ -505,6 +528,52 @@ fun HomeTab(
             })
 
             Spacer(modifier = Modifier.height(32.dp))
+
+            // Upgrade to Pro banner — hidden for pro users
+            if (!isUserPro) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB)),
+                                start = Offset.Zero,
+                                end = Offset(400f, 0f)
+                            )
+                        )
+                        .clickable { onUpgradeClick() }
+                        .padding(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "\u2728 Upgrade to Pro",
+                                style = Typography.titleMedium.copy(fontSize = 18.sp),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Remove all ads & unlock premium features",
+                                style = Typography.bodyMedium.copy(fontSize = 13.sp),
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = "Upgrade",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
 
             DataSpeedCard(speedInfo = networkInfo.speedInfo, context = context)
             
@@ -527,117 +596,192 @@ fun AnalyticsTab(
     signalHistory: List<SignalHistoryEntity>,
     speedTests: List<SpeedTestEntity>,
     pingTests: List<PingTestEntity>,
-    gameServers: List<GameServer>
+    gameServers: List<GameServer>,
+    isUserPro: Boolean = false,
+    onUpgradeClick: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val currentRsrp = networkInfo.signalStrength.rsrp
     val signalColor = getSignalLevelColor(networkInfo.signalStrength.level)
     val signalRsrpHistory = signalHistory.map { it.rsrp }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(start = 24.dp, end = 24.dp, bottom = 140.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Analytics",
-            style = Typography.titleLarge.copy(fontSize = 28.sp),
-            color = TextPrimary,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        GlobalServerLatencyCard(gameServers)
-        
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Signal History Card
-        AnalyticsCard(
-            title = "SIGNAL HISTORY",
-            subtitle = "Collected while app is running"
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Main analytics content — blurred when not pro
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState, enabled = isUserPro)
+                .padding(start = 24.dp, end = 24.dp, bottom = 140.dp)
+                .then(if (!isUserPro) Modifier.blur(15.dp) else Modifier),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (signalRsrpHistory.isNotEmpty()) {
-                SignalHistoryChart(
-                    history = signalRsrpHistory,
-                    modifier = Modifier.fillMaxWidth().height(100.dp),
-                    color = signalColor
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Min: ${signalRsrpHistory.minOrNull() ?: 0} dBm", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                    Text("Avg: ${signalRsrpHistory.average().toInt()} dBm", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                    Text("Max: ${signalRsrpHistory.maxOrNull() ?: 0} dBm", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                    Text("Collecting signal data...", style = Typography.bodyMedium, color = TextSecondary)
-                }
-            }
-        }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Analytics",
+                style = Typography.titleLarge.copy(fontSize = 28.sp),
+                color = TextPrimary,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(24.dp))
 
+            GlobalServerLatencyCard(gameServers)
+            
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Speed Test History Card
-        AnalyticsCard(
-            title = "SPEED TEST HISTORY",
-            subtitle = "From Tools page"
-        ) {
-            if (speedTests.isNotEmpty()) {
-                var selectedTest by remember { mutableStateOf<SpeedTestEntity?>(null) }
-
-                SpeedTestBarChart(
-                    speedTests = speedTests.takeLast(10).reversed(),
-                    onTestClick = { selectedTest = it }
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${speedTests.size} tests", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                    Text("Best: ${String.format("%.1f", speedTests.maxOfOrNull { maxOf(it.downloadSpeed, it.uploadSpeed) } ?: 0.0)} Mbps", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                }
-
-                if (selectedTest != null) {
-                    SpeedTestDetailSheet(
-                        test = selectedTest!!,
-                        onDismiss = { selectedTest = null }
+            // Signal History Card
+            AnalyticsCard(
+                title = "SIGNAL HISTORY",
+                subtitle = "Collected while app is running"
+            ) {
+                if (signalRsrpHistory.isNotEmpty()) {
+                    SignalHistoryChart(
+                        history = signalRsrpHistory,
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        color = signalColor
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Min: ${signalRsrpHistory.minOrNull() ?: 0} dBm", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                        Text("Avg: ${signalRsrpHistory.average().toInt()} dBm", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                        Text("Max: ${signalRsrpHistory.maxOrNull() ?: 0} dBm", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                        Text("Collecting signal data...", style = Typography.bodyMedium, color = TextSecondary)
+                    }
                 }
-            } else {
-                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                    Text("Run speed test in Tools", style = Typography.bodyMedium, color = TextSecondary)
+            }
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Speed Test History Card
+            AnalyticsCard(
+                title = "SPEED TEST HISTORY",
+                subtitle = "From Tools page"
+            ) {
+                if (speedTests.isNotEmpty()) {
+                    var selectedTest by remember { mutableStateOf<SpeedTestEntity?>(null) }
+
+                    SpeedTestBarChart(
+                        speedTests = speedTests.takeLast(10).reversed(),
+                        onTestClick = { selectedTest = it }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("${speedTests.size} tests", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                        Text("Best: ${String.format("%.1f", speedTests.maxOfOrNull { maxOf(it.downloadSpeed, it.uploadSpeed) } ?: 0.0)} Mbps", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                    }
+
+                    if (selectedTest != null) {
+                        SpeedTestDetailSheet(
+                            test = selectedTest!!,
+                            onDismiss = { selectedTest = null }
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                        Text("Run speed test in Tools", style = Typography.bodyMedium, color = TextSecondary)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Ping Test History Card
+            AnalyticsCard(
+                title = "PING TEST HISTORY",
+                subtitle = "From Tools page"
+            ) {
+                if (pingTests.isNotEmpty()) {
+                    PingHistoryChart(
+                        history = pingTests.takeLast(30).map { it.latency },
+                        modifier = Modifier.fillMaxWidth().height(80.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("${pingTests.size} tests", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                        Text("Avg: ${pingTests.takeLast(30).map { it.latency }.average().toInt()} ms", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                        Text("Run ping test in Tools", style = Typography.bodyMedium, color = TextSecondary)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(70.dp))
+        }
+
+        // Lock overlay for non-pro users
+        if (!isUserPro) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 48.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
+                                ),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = Color.White,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Pro Analytics Locked",
+                        style = Typography.titleLarge.copy(fontSize = 22.sp),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Upgrade to view detailed server latency history, signal trends, and performance analytics.",
+                        style = Typography.bodyMedium.copy(fontSize = 14.sp),
+                        color = Color.White.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(50.dp)
+                            .clip(RoundedCornerShape(25.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
+                                )
+                            )
+                            .clickable { onUpgradeClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "\uD83D\uDD13 Unlock Now",
+                            style = Typography.labelMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Ping Test History Card
-        AnalyticsCard(
-            title = "PING TEST HISTORY",
-            subtitle = "From Tools page"
-        ) {
-            if (pingTests.isNotEmpty()) {
-                PingHistoryChart(
-                    history = pingTests.takeLast(30).map { it.latency },
-                    modifier = Modifier.fillMaxWidth().height(80.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${pingTests.size} tests", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                    Text("Avg: ${pingTests.takeLast(30).map { it.latency }.average().toInt()} ms", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                    Text("Run ping test in Tools", style = Typography.bodyMedium, color = TextSecondary)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(70.dp))
     }
 }
 
@@ -688,6 +832,8 @@ fun ToolsTab(
     speedTestResult: SpeedTestResult?,
     pingTestResult: PingTestResult?,
     gameServers: List<GameServer>,
+    isUserPro: Boolean = false,
+    onUpgradeClick: () -> Unit = {},
     onSpeedTestClick: () -> Unit,
     onPingTestClick: () -> Unit,
     context: Context
@@ -728,7 +874,7 @@ fun ToolsTab(
         
         Spacer(modifier = Modifier.height(16.dp))
 
-        GameServersPingCard(gameServers, telephonyService)
+        GameServersPingCard(gameServers, telephonyService, isUserPro, onUpgradeClick)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -1083,6 +1229,30 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
                 } catch (e: Exception) {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")))
                 }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Manage Subscription (RevenueCat Customer Center)
+        SettingsCard(
+            title = "Manage Subscription",
+            icon = Icons.Default.CreditCard,
+            onClick = {
+                Purchases.sharedInstance.getCustomerInfoWith(
+                    onError = {
+                        Toast.makeText(context, "Unable to load subscription info", Toast.LENGTH_SHORT).show()
+                    },
+                    onSuccess = { customerInfo ->
+                        val url = customerInfo.managementURL?.toString()
+                            ?: "https://play.google.com/store/account/subscriptions"
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Unable to open subscriptions", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
             }
         )
 
@@ -2547,7 +2717,12 @@ val GameServerColors = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GameServersPingCard(gameServers: List<GameServer>, telephonyService: TelephonyService) {
+fun GameServersPingCard(
+    gameServers: List<GameServer>,
+    telephonyService: TelephonyService,
+    isUserPro: Boolean = false,
+    onUpgradeClick: () -> Unit = {}
+) {
     var showSheet by remember { mutableStateOf(false) }
     
     Box(
@@ -2555,7 +2730,13 @@ fun GameServersPingCard(gameServers: List<GameServer>, telephonyService: Telepho
             .fillMaxWidth()
             .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
             .background(NeumorphicBackground, RoundedCornerShape(24.dp))
-            .clickable { showSheet = true }
+            .clickable {
+                if (isUserPro) {
+                    showSheet = true
+                } else {
+                    onUpgradeClick()
+                }
+            }
             .padding(20.dp)
     ) {
         Row(
@@ -2567,11 +2748,36 @@ fun GameServersPingCard(gameServers: List<GameServer>, telephonyService: Telepho
                 Icon(Icons.Default.Gamepad, contentDescription = null, tint = GradientStart, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text("GAMING PING ANALYZER", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("GAMING PING ANALYZER", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
+                        if (!isUserPro) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
+                                        ),
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "PRO",
+                                    style = Typography.labelMedium.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
                     Text("Regional Server Test", style = Typography.titleMedium.copy(fontSize = 18.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            if (!isUserPro) {
+                Icon(Icons.Default.Lock, contentDescription = "Pro feature", tint = Color(0xFF6C63FF), modifier = Modifier.size(20.dp))
+            } else {
+                Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            }
         }
     }
 

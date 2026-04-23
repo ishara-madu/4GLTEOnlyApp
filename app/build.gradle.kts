@@ -5,6 +5,15 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+import java.util.Properties
+import java.io.FileInputStream
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
 android {
     namespace = "com.pixeleye.lteonly"
     compileSdk = 36
@@ -17,6 +26,20 @@ android {
         versionName = "1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // BuildConfig fields from local.properties
+        val revenueCatKey = localProperties.getProperty("REVENUECAT_API_KEY") ?: ""
+        val admobAppId = localProperties.getProperty("ADMOB_APP_ID") ?: ""
+        val admobInterstitialId = localProperties.getProperty("ADMOB_INTERSTITIAL_ID") ?: ""
+        val admobAppOpenId = localProperties.getProperty("ADMOB_APP_OPEN_ID") ?: ""
+        val admobBannerId = localProperties.getProperty("ADMOB_BANNER_ID") ?: ""
+
+        buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
+        buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"$admobInterstitialId\"")
+        buildConfigField("String", "ADMOB_APP_OPEN_ID", "\"$admobAppOpenId\"")
+        buildConfigField("String", "ADMOB_BANNER_ID", "\"$admobBannerId\"")
+        
+        manifestPlaceholders["admob_app_id"] = admobAppId
     }
 
     buildTypes {
@@ -42,6 +65,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -63,6 +87,8 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.play.services.ads)
     implementation("com.google.android.play:review-ktx:2.0.1")
+    implementation("com.revenuecat.purchases:purchases:10.2.0")
+    implementation("com.revenuecat.purchases:purchases-ui:10.2.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
