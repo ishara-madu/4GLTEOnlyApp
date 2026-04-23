@@ -1,7 +1,7 @@
 # Force LTE Only
 
 <p align="center">
-  <img src="app/src/main/res/drawable/ic_launcher_foreground.webp" alt="Force LTE Only Logo" width="200"/>
+  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp" alt="Force LTE Only Logo" width="200"/>
 </p>
 
 <p align="center">
@@ -26,14 +26,14 @@
 
 ## Table of Contents
 
+- [What's New](#whats-new)
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
 - [Project Structure](#project-structure)
-- [Architecture](#architecture)
-- [Technologies Used](#technologies-used)
+- [Architecture & Tech Stack](#architecture--tech-stack)
 - [Permissions](#permissions)
 - [How It Works](#how-it-works)
 - [Contributing](#contributing)
@@ -42,36 +42,42 @@
 
 ---
 
+## What's New 🚀
+
+- **Live Network Band Info:** Dynamically detects and displays the connected LTE/5G Band in real-time, handling required location permissions gracefully.
+- **LTE Only PRO (Premium Tier):** Integrated **RevenueCat** for robust subscription management. Users can upgrade to an ad-free Pro tier to unlock advanced network tools like the Game Servers Ping Analyzer and historical analytics.
+- **Google Play In-App Reviews:** Seamlessly integrates the native In-App Review API, intelligently and silently triggering after successful network switching flows without spamming the user.
+- **Massive Performance Optimizations:** App size reduced by over **50%** for release builds using aggressive **R8 shrinking**, strict resource minification, unused dependency stripping, and comprehensive **WebP** asset conversion, all without compromising UI/UX!
+
+---
+
 ## Features
 
 ### 📡 Network Monitoring
-- **Real-time Signal Analysis** - Monitor RSRP, RSRQ, RSSI, and SINR signal metrics
-- **Carrier Information** - View carrier name, network type, MCC/MNC codes, and Cell ID
-- **Band Detection** - Automatically detect LTE and 5G NR bands
-- **Connection Status** - Live connection state and roaming detection
+- **Real-time Signal Analysis** - Monitor RSRP, RSRQ, RSSI, and SINR signal metrics.
+- **Carrier & Band Information** - View carrier name, network type, MCC/MNC codes, Cell ID, and live LTE/5G NR Band tracking.
+- **Connection Status** - Live connection state and roaming detection.
 
-### ⚡ Speed Testing
-- **Download Speed Test** - Measure your actual download speeds
-- **Upload Speed Test** - Measure your upload performance
-- **Ping/Latency Test** - Check your network response time
-- **Speed History** - Track and analyze your speed test results over time
+### ⚡ Speed & Latency Testing
+- **Speed Tests** - Measure your actual download and upload speeds.
+- **Ping/Latency Test** - Check your network response time.
+- **Gaming Ping Analyzer (PRO)** - Real-time regional server latency tests tailored for global gaming servers.
 
 ### 📊 Analytics
-- **Signal History Chart** - Visualize signal strength changes over time
-- **Speed Test History** - Review past speed test results with charts
-- **Ping History** - Track latency trends and identify network issues
-- **Data Usage Tracking** - Monitor mobile and Wi-Fi data consumption
+- **Signal History Chart** - Visualize signal strength changes over time.
+- **Pro Analytics** - Review historical speed test results with clear, dynamic charts.
+- **Data Usage Tracking** - Monitor mobile and Wi-Fi data consumption.
 
 ### 🎛️ Tools
-- **4G LTE Switcher** - Quick access to force LTE network mode via system settings
-- **APN Settings** - Direct link to configure your APN settings
-- **Background Monitoring** - Continuous signal monitoring while app is running
+- **4G LTE Switcher** - Quick access to force LTE network mode via hidden system settings (with fallback dialer intents).
+- **APN Settings** - Direct link to configure your APN settings.
+- **Background Monitoring** - Continuous signal monitoring while the app is running.
 
 ### 🎨 User Experience
-- **Neumorphic Design** - Beautiful, modern UI with soft shadows and depth
-- **Dark/Light/Auto Theme** - Choose your preferred appearance
-- **Smooth Animations** - Fluid transitions and micro-interactions
-- **Intuitive Navigation** - Bottom navigation with 4 main sections
+- **100% Jetpack Compose** - Built entirely with modern declarative UI.
+- **Neumorphic Design** - Beautiful, modern UI with soft shadows and depth.
+- **Theme Engine** - Dynamically adapts to Light, Dark, and System themes.
+- **Ad-Free Interface (PRO)** - Completely remove all banner, interstitial, and app-open ads.
 
 ---
 
@@ -94,7 +100,7 @@
 
 - **Android Version**: 7.0 Nougat (API 24) or higher
 - **Device**: Any Android device with cellular capabilities
-- **Permissions**: Location and Phone State access required for signal monitoring
+- **Permissions**: Location and Phone State access required for signal and band monitoring
 
 ---
 
@@ -129,18 +135,19 @@ Before building, ensure you have the following installed:
    cd ForceLTEOnly
    ```
 
-2. **Open in Android Studio**
-   - Launch Android Studio
-   - Select "Open an existing project"
-   - Navigate to the cloned directory
-   - Wait for Gradle sync to complete
+2. **Configure Security & Keys (local.properties)**
+   Create a `local.properties` file in the root directory and add your API keys:
+   ```properties
+   REVENUECAT_API_KEY=your_revenuecat_key_here
+   ADMOB_APP_ID=ca-app-pub-your_admob_app_id
+   ADMOB_BANNER_ID=ca-app-pub-your_banner_id
+   ADMOB_INTERSTITIAL_ID=ca-app-pub-your_interstitial_id
+   ADMOB_APP_OPEN_ID=ca-app-pub-your_app_open_id
+   ```
 
-3. **Configure Firebase/AdMob (Optional)**
-   - If you want to use AdMob:
-     - Create a Firebase project at [Firebase Console](https://console.firebase.google.com)
-     - Add your Android app with the package name `com.pixeleye.lteonly`
-     - Download `google-services.json` and place it in the `app/` directory
-   - For testing without ads, the app uses test ad units by default
+3. **Open in Android Studio**
+   - Select "Open an existing project" and navigate to the cloned directory.
+   - Wait for Gradle sync to complete.
 
 4. **Build the Debug APK**
    ```bash
@@ -151,11 +158,7 @@ Before building, ensure you have the following installed:
    ```bash
    ./gradlew assembleRelease
    ```
-   - Configure signing in `gradle.properties` or use Android Studio's signing config
-
-6. **Find the APK**
-   - Debug APK: `app/release/app-debug.apk`
-   - Release APK: `app/release/app-release.apk`
+   *Note: Release builds are heavily optimized with R8. Ensure your keys are valid to prevent build failures.*
 
 ---
 
@@ -167,99 +170,62 @@ ForceLTEOnly/
 │   ├── src/
 │   │   └── main/
 │   │       ├── java/com/pixeleye/lteonly/
-│   │       │   ├── MainActivity.kt          # Main entry point
-│   │       │   ├── LteOnlyApp.kt             # Application class
-│   │       │   ├── TelephonyService.kt       # Core signal monitoring
+│   │       │   ├── MainActivity.kt          # Main Compose entry point
+│   │       │   ├── LteOnlyApplication.kt    # Application class (RevenueCat/AdMob Init)
+│   │       │   ├── TelephonyService.kt      # Core signal & band monitoring
 │   │       │   ├── RadioInfoHelper.kt       # Opens LTE settings
-│   │       │   ├── NetworkInfo.kt            # Data models
-│   │       │   ├── AppDatabase.kt            # Room database
-│   │       │   ├── AppRepository.kt          # Data repository
-│   │       │   ├── SettingsManager.kt        # User preferences
-│   │       │   ├── ThemeManager.kt           # Theme handling
-│   │       │   ├── NotificationHelper.kt    # Notifications
-│   │       │   ├── SpeedTestReminderWorker.kt# Background worker
-│   │       │   ├── AdManager.kt              # AdMob integration
-│   │       │   ├── AdComposables.kt          # Ad UI components
-│   │       │   ├── SpeedTestDao.kt           # Speed test database
-│   │       │   ├── PingTestDao.kt            # Ping test database
-│   │       │   ├── DataUsageDao.kt           # Data usage database
-│   │       │   ├── SignalHistoryDao.kt       # Signal history database
-│   │       │   ├── *Entity.kt                # Database entities
+│   │       │   ├── PremiumUpgradeScreen.kt  # Custom RevenueCat Paywall UI
+│   │       │   ├── ProStateManager.kt       # Global premium state flow
+│   │       │   ├── AdManager.kt             # Strict AdMob implementation
+│   │       │   ├── Room DB & Repositories   # Local Data Persistence
 │   │       │   └── ui/
-│   │       │       ├── theme/               # Compose theming
-│   │       │       │   ├── Color.kt
-│   │       │       │   ├── Type.kt
-│   │       │       │   ├── Theme.kt
-│   │       │       │   └── Neumorphic.kt    # Custom neumorphic styles
-│   │       │       └── (UI components in MainActivity.kt)
-│   │       ├── res/                          # Android resources
+│   │       │       └── theme/               # Material 3 & Neumorphic styling
+│   │       ├── res/                         # Compressed WebP Android resources
 │   │       └── AndroidManifest.xml
-│   ├── build.gradle.kts
-│   └── proguard-rules.pro
-├── gradle/                                    # Gradle wrapper
-├── build.gradle.kts                           # Root build file
-├── settings.gradle.kts
-├── gradle.properties
-└── README.md
+│   ├── build.gradle.kts                     # App-level build logic
+│   └── proguard-rules.pro                   # Custom R8 keep rules
+├── gradle/                                  # Gradle wrapper
+├── build.gradle.kts                         # Root build file
+└── local.properties                         # Secret Keys (Git Ignored)
 ```
 
 ---
 
-## Architecture
+## Architecture & Tech Stack
 
-The app follows a clean, modular architecture pattern:
+The app follows a clean, modular architecture pattern strictly adhering to modern Android development practices.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        UI Layer                              │
-│  (Jetpack Compose - MainActivity, Composable functions)      │
+│  (100% Jetpack Compose - Reactive State Flows)               │
 └─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Domain Layer                            │
-│  (TelephonyService, RadioInfoHelper, NetworkInfo)            │
+│  (TelephonyService, RadioInfoHelper, ProStateManager)        │
 └─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                       Data Layer                             │
-│  (Room Database, SharedPreferences, Repositories)            │
+│  (Room Database, RevenueCat SDK, AdMob SDK, Data Repos)      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Key Components
-
-- **TelephonyService** - Handles all telephony and signal-related operations
-- **AppRepository** - Manages data flow between UI and database
-- **Room Database** - Stores signal history, speed tests, ping tests, and data usage
-- **WorkManager** - Handles periodic speed test reminders
-- **ThemeManager** - Manages app theming (Light/Dark/System)
-
----
-
-## Technologies Used
+### Key Technologies Used
 
 | Category | Technology |
 |----------|------------|
 | **Language** | Kotlin 1.9+ |
-| **UI Framework** | Jetpack Compose (Material 3) |
+| **UI Framework** | **Jetpack Compose** (Material 3) |
 | **Architecture** | MVVM + Clean Architecture |
-| **DI** | Manual dependency injection |
-| **Database** | Room Persistence Library |
-| **Background Tasks** | WorkManager |
+| **Monetization** | **RevenueCat** (Purchases SDK) |
 | **Ads** | Google AdMob |
+| **Database** | Room Persistence Library |
 | **Async** | Kotlin Coroutines & Flow |
 | **Build System** | Gradle with Kotlin DSL |
-
-### Key Dependencies
-
-- `androidx.compose.ui` - Compose UI toolkit
-- `androidx.compose.material3` - Material Design 3 components
-- `androidx.room` - Local database
-- `androidx.work` - Background processing
-- `play-services-ads` - AdMob integration
-- `androidx.lifecycle` - ViewModel and lifecycle-aware components
 
 ---
 
@@ -270,39 +236,24 @@ The app requires the following permissions to function:
 | Permission | Purpose |
 |------------|---------|
 | `READ_PHONE_STATE` | Access signal strength and network information |
-| `ACCESS_FINE_LOCATION` | Required for accurate cell tower detection |
+| `ACCESS_FINE_LOCATION` | Required for accurate cell tower and **LTE Band** detection |
 | `ACCESS_COARSE_LOCATION` | Fallback location access |
-| `INTERNET` | Speed test functionality |
+| `INTERNET` | Speed test functionality & API interactions |
 | `POST_NOTIFICATIONS` | Speed test reminders (Android 13+) |
-
-### Why These Permissions?
-
-- **Phone State** - To read RSRP, RSRQ, RSSI, and other signal metrics from the cellular radio
-- **Location** - Android requires location permission to access detailed cell information (this is a system requirement for signal monitoring on modern Android versions)
-- **Internet** - Speed tests download and upload data to measure connection quality
-- **Notifications** - To send reminders for periodic speed tests
 
 ---
 
 ## How It Works
 
 ### Signal Monitoring
-1. The app uses Android's `TelephonyManager` to access cellular information
-2. `CellInfoLte` and `CellInfoNr` provide detailed signal metrics
-3. Signal data is sampled every 2 seconds while the app is running
-4. Data is stored in Room database for historical analysis
+1. The app uses Android's `TelephonyManager` to access cellular information.
+2. `CellInfoLte` and `CellInfoNr` provide detailed signal metrics and LTE bands.
+3. Data is stored in a Room database for historical analysis.
 
 ### Network Mode Switching
-1. The app provides a shortcut button to open system Radio Info menus
-2. These menus are manufacturer-specific system settings
-3. From there, users can select their preferred network mode (LTE only, 5G preferred, etc.)
-4. Note: Direct programmatic network mode changes are restricted by Android for security
-
-### Speed Testing
-1. Downloads 5MB from Cloudflare's speed test endpoint
-2. Uploads 5MB to the same endpoint
-3. Measures ping latency using system ping command
-4. Results are stored and displayed in the Analytics tab
+1. The app provides a shortcut button to open system Radio Info menus.
+2. From there, users can select their preferred network mode (LTE only, 5G preferred, etc.).
+3. Note: Direct programmatic network mode changes are restricted by Android for security.
 
 ---
 
@@ -311,36 +262,14 @@ The app requires the following permissions to function:
 Contributions are welcome! Here's how you can help:
 
 1. **Fork the Repository**
-   ```bash
-   git fork https://github.com/ishara-madu/4GLTEOnlyApp
-   ```
-
-2. **Create a Feature Branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-3. **Make Your Changes**
-   - Follow the existing code style
-   - Add comments for complex logic
-   - Update documentation as needed
-
-4. **Commit Your Changes**
-   ```bash
-   git commit -m "Add: your feature description"
-   ```
-
-5. **Push and Create Pull Request**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
+2. **Create a Feature Branch** (`git checkout -b feature/your-feature-name`)
+3. **Commit Your Changes** (`git commit -m "Add: your feature description"`)
+4. **Push and Create Pull Request**
 
 ### Reporting Issues
-
 - Use GitHub Issues to report bugs
 - Include your Android version and device model
 - Provide steps to reproduce the issue
-- Attach logs if applicable
 
 ---
 
@@ -348,67 +277,28 @@ Contributions are welcome! Here's how you can help:
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-```
-MIT License
-
-Copyright (c) 2024 PixelEye
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
 ---
 
 ## Support
 
 ### Get Help
 - 📖 Check the [Wiki](https://github.com/ishara-madu/4GLTEOnlyApp/wiki)
-- 💬 Join our [Discussions](https://github.com/ishara-madu/4GLTEOnlyApp/discussions)
 - 🐛 Report bugs via [Issues](https://github.com/ishara-madu/4GLTEOnlyApp/issues)
 
 ### Rate the App
 If you find this app useful, please consider:
 - ⭐ Starring the repository
 - ⬇️ Rating on [Google Play Store](https://play.google.com/store/apps/details?id=com.pixeleye.lteonly)
-- 🐦 Sharing with friends
-
-### Donate
-If you'd like to support development:
-- ☕ Buy me a coffee
-- 💝 Become a sponsor
 
 ---
 
 ## Acknowledgments
-
+- Built with **Jetpack Compose**
+- Monetization powered by **RevenueCat**
 - Design inspired by modern neumorphic UI trends
-- Speed test powered by [Cloudflare](https://cloudflare.com)
-- Built with [Jetpack Compose](https://developer.android.com/compose)
-- Icons from [Material Design Icons](https://fonts.google.com/icons)
 
 ---
 
 <p align="center">
   Made with ❤️ by <a href="https://github.com/ishara-madu">Ishara Madhusanka</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/ishara-madu/4GLTEOnlyApp">Repository</a> •
-  <a href="https://github.com/ishara-madu/4GLTEOnlyApp/releases">Releases</a> •
-  <a href="https://github.com/ishara-madu/4GLTEOnlyApp/issues">Issues</a>
 </p>
