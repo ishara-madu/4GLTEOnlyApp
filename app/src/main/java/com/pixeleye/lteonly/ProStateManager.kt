@@ -34,8 +34,15 @@ object ProStateManager {
             },
             onSuccess = { customerInfo ->
                 val isPro = customerInfo.entitlements[ENTITLEMENT_ID]?.isActive == true
+                val wasPro = _isUserPro.value
                 _isUserPro.value = isPro
                 Log.d(TAG, "Entitlement check: isPro=$isPro")
+
+                // If user just became Pro, immediately clear all cached ads
+                if (isPro && !wasPro) {
+                    Log.d(TAG, "User upgraded to Pro — clearing all ads")
+                    AdManager.clearAllAds()
+                }
             }
         )
     }

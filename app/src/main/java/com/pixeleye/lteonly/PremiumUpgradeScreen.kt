@@ -254,14 +254,31 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                                 PurchaseParams.Builder(activity, pkgToPurchase).build(),
                                 onError = { error, userCancelled ->
                                     isPurchasing = false
-                                    if (!userCancelled) {
+                                    if (userCancelled) {
+                                        Toast.makeText(context, "Purchase cancelled", Toast.LENGTH_SHORT).show()
+                                    } else {
                                         Toast.makeText(context, "Purchase failed: ${error.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                onSuccess = { _, _ ->
+                                onSuccess = { _, customerInfo ->
                                     isPurchasing = false
-                                    ProStateManager.checkEntitlement()
-                                    showSuccess = true
+                                    // Strict entitlement verification from the receipt
+                                    val isEntitlementActive = customerInfo
+                                        .entitlements["Force LTE Only Pro"]
+                                        ?.isActive == true
+
+                                    if (isEntitlementActive) {
+                                        // Update global state only after verified receipt
+                                        ProStateManager.checkEntitlement()
+                                        showSuccess = true
+                                    } else {
+                                        // Payment was not completed or entitlement not granted
+                                        Toast.makeText(
+                                            context,
+                                            "Payment could not be verified. Please try again.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
                                 }
                             )
                         }

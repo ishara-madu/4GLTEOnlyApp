@@ -25,15 +25,39 @@ object AdManager {
     private var isShowingAppOpenAd = false
     private var appOpenAdLoadTime: Long = 0
 
+    /** Check if the user is currently a Pro subscriber. */
+    private val isProUser: Boolean
+        get() = ProStateManager.isUserPro.value
+
     fun initialize(context: Context) {
         MobileAds.initialize(context) { status ->
             Log.d(TAG, "AdMob Initialized: $status")
-            loadInterstitial(context)
-            loadAppOpenAd(context)
+            if (!isProUser) {
+                loadInterstitial(context)
+                loadAppOpenAd(context)
+            } else {
+                Log.d(TAG, "Pro user — skipping ad preloads")
+            }
         }
     }
 
+    /**
+     * Called when the user upgrades to Pro mid-session.
+     * Immediately releases all cached ad instances to prevent leakage.
+     */
+    fun clearAllAds() {
+        Log.d(TAG, "Clearing all cached ads for Pro user")
+        interstitialAd = null
+        appOpenAd = null
+        isAdLoading = false
+        isShowingAppOpenAd = false
+    }
+
     private fun loadInterstitial(context: Context) {
+        if (isProUser) {
+            Log.d(TAG, "Pro user — skipping interstitial load")
+            return
+        }
         if (interstitialAd != null || isAdLoading) return
 
         isAdLoading = true
@@ -52,6 +76,12 @@ object AdManager {
 
                 override fun onAdLoaded(ad: InterstitialAd) {
                     Log.d(TAG, "Interstitial ad loaded successfully")
+                    // Double-check: if user became Pro while loading, discard immediately
+                    if (isProUser) {
+                        Log.d(TAG, "Pro user detected after interstitial load — discarding")
+                        isAdLoading = false
+                        return
+                    }
                     interstitialAd = ad
                     isAdLoading = false
                 }
@@ -60,6 +90,11 @@ object AdManager {
     }
 
     fun loadAppOpenAd(context: Context) {
+        if (isProUser) {
+            Log.d(TAG, "Pro user — skipping app open ad load")
+            return
+        }
+
         val request = AdRequest.Builder().build()
         AppOpenAd.load(
             context,
@@ -67,6 +102,11 @@ object AdManager {
             request,
             object : AppOpenAdLoadCallback() {
                 override fun onAdLoaded(ad: AppOpenAd) {
+                    // Double-check: if user became Pro while loading, discard immediately
+                    if (isProUser) {
+                        Log.d(TAG, "Pro user detected after app open ad load — discarding")
+                        return
+                    }
                     appOpenAd = ad
                     appOpenAdLoadTime = Date().time
                     Log.d(TAG, "App Open Ad loaded")
@@ -86,6 +126,13 @@ object AdManager {
     }
 
     fun showAppOpenAdIfAvailable(activity: Activity) {
+        // Strict Pro guardrail
+        if (isProUser) {
+            appOpenAd = null
+            Log.d(TAG, "Pro user — blocking app open ad")
+            return
+        }
+
         if (isShowingAppOpenAd) return
 
         if (appOpenAd == null || !wasLoadTimeLessThanNHoursAgo(4)) {
@@ -114,6 +161,14 @@ object AdManager {
     }
 
     fun showInterstitial(activity: Activity, onAdDismissed: () -> Unit = {}) {
+        // Strict Pro guardrail
+        if (isProUser) {
+            interstitialAd = null
+            Log.d(TAG, "Pro user — blocking interstitial ad")
+            onAdDismissed()
+            return
+        }
+
         if (interstitialAd != null) {
             interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {

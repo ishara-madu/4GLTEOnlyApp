@@ -43,6 +43,8 @@ class LTEOnlyApplication : Application(), Application.ActivityLifecycleCallbacks
 
     override fun onStart(owner: LifecycleOwner) {
         super<DefaultLifecycleObserver>.onStart(owner)
+        // Skip App Open Ad entirely for Pro users
+        if (ProStateManager.isUserPro.value) return
         // Show App Open Ad when app returns to foreground
         currentActivity?.let {
             AdManager.showAppOpenAdIfAvailable(it)
