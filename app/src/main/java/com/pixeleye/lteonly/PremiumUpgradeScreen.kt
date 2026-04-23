@@ -4,6 +4,7 @@ import android.app.Activity
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +34,7 @@ import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.getOfferingsWith
 import com.revenuecat.purchases.purchaseWith
 import com.revenuecat.purchases.restorePurchasesWith
+import com.pixeleye.lteonly.ui.theme.neumorphic
 
 @Composable
 fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
@@ -341,7 +343,7 @@ fun FeatureRow(icon: ImageVector, title: String, description: String) {
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                .neumorphic(cornerRadius = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -377,23 +379,22 @@ fun PackageCard(
     savingsPercent: Int,
     onClick: () -> Unit
 ) {
-    Card(
+    Box(
         modifier = modifier
+            .neumorphic(cornerRadius = 16.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) 
-                             else MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(
-            width = if (isSelected || isBestValue) 2.dp else 1.dp,
-            color = if (isSelected) MaterialTheme.colorScheme.primary 
-                    else if (isBestValue) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    else MaterialTheme.colorScheme.outlineVariant
-        )
+            .clickable { onClick() }
+            .border(
+                width = if (isSelected || isBestValue) 2.dp else 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary 
+                        else if (isBestValue) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(16.dp)
+            )
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().background(
+            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.05f) else Color.Transparent
+        )) {
             // Best Value Badge
             if (isBestValue && savingsPercent > 0) {
                 Box(
@@ -426,7 +427,7 @@ fun PackageCard(
                         com.revenuecat.purchases.PackageType.ANNUAL -> "Yearly"
                         com.revenuecat.purchases.PackageType.MONTHLY -> "Monthly"
                         com.revenuecat.purchases.PackageType.WEEKLY -> "Weekly"
-                        else -> pkg.packageType.name.lowercase().capitalize()
+                        else -> pkg.packageType.name.lowercase().replaceFirstChar { it.uppercase() }
                     },
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelLarge,
