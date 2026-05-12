@@ -36,6 +36,9 @@ import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.getOfferingsWith
 import com.revenuecat.purchases.purchaseWith
 import com.revenuecat.purchases.restorePurchasesWith
+import com.pixeleye.lteonly.ui.theme.NeumorphicBackground
+import com.pixeleye.lteonly.ui.theme.TextPrimary
+import com.pixeleye.lteonly.ui.theme.TextSecondary
 import com.pixeleye.lteonly.ui.theme.neumorphic
 
 @Composable
@@ -93,7 +96,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
     if (showSuccess) {
         Dialog(onDismissRequest = onDismiss) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = NeumorphicBackground),
                 shape = RoundedCornerShape(24.dp),
                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
                 modifier = Modifier.size(240.dp)
@@ -109,7 +112,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                         Spacer(modifier = Modifier.height(20.dp))
                         Text(
                             text = "Pro Mode Activated!",
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = TextPrimary,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
@@ -133,7 +136,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(NeumorphicBackground)
         ) {
             Column(
                 modifier = Modifier
@@ -148,7 +151,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.End
                 ) {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onBackground)
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextPrimary)
                     }
                 }
 
@@ -178,7 +181,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                 // Title
                 Text(
                     text = "LTE ONLY PRO",
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = TextPrimary,
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.sp
@@ -186,7 +189,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
 
                 Text(
                     text = "ELEVATE YOUR CONNECTIVITY",
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    color = TextSecondary,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.5.sp,
@@ -320,11 +323,11 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                         FooterLink("Terms of Use") {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/terms")))
                         }
-                        Text(" • ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                        Text(" • ", color = TextSecondary.copy(alpha = 0.4f))
                         FooterLink("Privacy Policy") {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ishara-madu.github.io/4GLTEOnlyApp/privacy")))
                         }
-                        Text(" • ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                        Text(" • ", color = TextSecondary.copy(alpha = 0.4f))
                         FooterLink("Restore Purchases") {
                             isPurchasing = true
                             Purchases.sharedInstance.restorePurchasesWith(
@@ -344,7 +347,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
 
                     Text(
                         text = "Subscription automatically renews. Cancel anytime via the Play Store settings.",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        color = TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -380,13 +383,13 @@ fun FeatureRow(icon: ImageVector, title: String, description: String) {
         Column {
             Text(
                 text = title, 
-                color = MaterialTheme.colorScheme.onBackground, 
+                color = TextPrimary, 
                 style = MaterialTheme.typography.titleMedium, 
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = description, 
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f), 
+                color = TextSecondary, 
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -402,6 +405,10 @@ fun PackageCard(
     savingsPercent: Int,
     onClick: () -> Unit
 ) {
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary 
+            else if (isBestValue) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            else TextSecondary.copy(alpha = 0.3f)
+
     Box(
         modifier = modifier
             .neumorphic(cornerRadius = 16.dp)
@@ -409,9 +416,7 @@ fun PackageCard(
             .clickable { onClick() }
             .border(
                 width = if (isSelected || isBestValue) 2.dp else 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary 
-                        else if (isBestValue) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                color = borderColor,
                 shape = RoundedCornerShape(16.dp)
             )
     ) {
@@ -424,14 +429,14 @@ fun PackageCard(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .background(
-                            MaterialTheme.colorScheme.tertiary, 
+                            MaterialTheme.colorScheme.primary, 
                             RoundedCornerShape(bottomStart = 8.dp)
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = "SAVE $savingsPercent%",
-                        color = MaterialTheme.colorScheme.onTertiary,
+                        color = Color.White,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -452,7 +457,7 @@ fun PackageCard(
                         com.revenuecat.purchases.PackageType.WEEKLY -> "Weekly"
                         else -> pkg.packageType.name.lowercase().replaceFirstChar { it.uppercase() }
                     },
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = TextPrimary,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium
                 )
@@ -461,7 +466,7 @@ fun PackageCard(
                 
                 Text(
                     text = pkg.product.price.formatted,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = TextPrimary,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -475,7 +480,7 @@ fun PackageCard(
                         com.revenuecat.purchases.PackageType.WEEKLY -> "per week"
                         else -> ""
                     },
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = TextSecondary,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -487,7 +492,7 @@ fun PackageCard(
 fun FooterLink(text: String, onClick: () -> Unit) {
     Text(
         text = text,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+        color = TextSecondary,
         style = MaterialTheme.typography.labelSmall,
         textDecoration = TextDecoration.Underline,
         modifier = Modifier.clickable { onClick() }
