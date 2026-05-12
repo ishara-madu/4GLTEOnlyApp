@@ -363,39 +363,41 @@ class TelephonyService(private val context: Context) {
 
             if (registeredCell == null) {
                 // Fallback to simpler SignalStrength API if cellInfo is empty (often happens if GPS is off on modern Android)
-                val signalStrength = telephonyManager.signalStrength
-                if (signalStrength != null) {
-                    val ssList = signalStrength.cellSignalStrengths
-                    val bestSs = ssList.maxByOrNull { it.dbm }
-                    if (bestSs != null) {
-                        var rsrpResult = 0
-                        var rsrqResult = 0
-                        var rssiResult = bestSs.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
-                        
-                        if (bestSs is android.telephony.CellSignalStrengthLte) {
-                            rsrpResult = bestSs.rsrp.takeIf { it != Int.MAX_VALUE } ?: 0
-                            rsrqResult = bestSs.rsrq.takeIf { it != Int.MAX_VALUE } ?: 0
-                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && bestSs is android.telephony.CellSignalStrengthNr) {
-                            rsrpResult = bestSs.ssRsrp.takeIf { it != Int.MAX_VALUE } ?: 0
-                            rsrqResult = bestSs.ssRsrq.takeIf { it != Int.MAX_VALUE } ?: 0
-                        } else {
-                            rsrpResult = rssiResult
-                        }
-                        
-                        val levelResult = getSignalLevel(rsrpResult)
-                        
-                        if (rsrpResult != 0 || rssiResult != 0) {
-                            signalHistory.add(rsrpResult)
-                            if (signalHistory.size > maxHistorySize) signalHistory.removeAt(0)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val signalStrength = telephonyManager.signalStrength
+                    if (signalStrength != null) {
+                        val ssList = signalStrength.cellSignalStrengths
+                        val bestSs = ssList.maxByOrNull { it.dbm }
+                        if (bestSs != null) {
+                            var rsrpResult = 0
+                            var rsrqResult = 0
+                            var rssiResult = bestSs.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
                             
-                            return SignalInfo(
-                                rsrp = rsrpResult,
-                                rsrq = rsrqResult,
-                                rssi = rssiResult,
-                                sinr = calculateSinr(rsrpResult, rsrqResult),
-                                level = levelResult,
-                                history = signalHistory.toList()
-                            )
+                            if (bestSs is android.telephony.CellSignalStrengthLte) {
+                                rsrpResult = bestSs.rsrp.takeIf { it != Int.MAX_VALUE } ?: 0
+                                rsrqResult = bestSs.rsrq.takeIf { it != Int.MAX_VALUE } ?: 0
+                            } else if (bestSs is android.telephony.CellSignalStrengthNr) {
+                                rsrpResult = bestSs.ssRsrp.takeIf { it != Int.MAX_VALUE } ?: 0
+                                rsrqResult = bestSs.ssRsrq.takeIf { it != Int.MAX_VALUE } ?: 0
+                            } else {
+                                rsrpResult = rssiResult
+                            }
+                            
+                            val levelResult = getSignalLevel(rsrpResult)
+                            
+                            if (rsrpResult != 0 || rssiResult != 0) {
+                                signalHistory.add(rsrpResult)
+                                if (signalHistory.size > maxHistorySize) signalHistory.removeAt(0)
+                                
+                                return SignalInfo(
+                                    rsrp = rsrpResult,
+                                    rsrq = rsrqResult,
+                                    rssi = rssiResult,
+                                    sinr = calculateSinr(rsrpResult, rsrqResult),
+                                    level = levelResult,
+                                    history = signalHistory.toList()
+                                )
+                            }
                         }
                     }
                 }
@@ -410,8 +412,12 @@ class TelephonyService(private val context: Context) {
                 when (registeredCell) {
                     is android.telephony.CellInfoLte -> {
                         val ss = registeredCell.cellSignalStrength
-                        rsrp = ss.rsrp.takeIf { it != Int.MAX_VALUE && it != 0 } ?: 0
-                        rsrq = ss.rsrq.takeIf { it != Int.MAX_VALUE } ?: 0
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            rsrp = ss.rsrp.takeIf { it != Int.MAX_VALUE && it != 0 } ?: 0
+                            rsrq = ss.rsrq.takeIf { it != Int.MAX_VALUE } ?: 0
+                        } else {
+                            rsrp = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
+                        }
                         rssi = ss.dbm.takeIf { it != Int.MAX_VALUE } ?: 0
                         level = getSignalLevel(rsrp)
                     }
@@ -512,9 +518,13 @@ class TelephonyService(private val context: Context) {
         return try {
             when (registeredCell) {
                 is android.telephony.CellInfoLte -> {
-                    val earfcn = registeredCell.cellIdentity.earfcn
-                    val band = getLteBand(earfcn)
-                    if (band != "--") "B$band ($earfcn)" else "EARFCN $earfcn"
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        val earfcn = registeredCell.cellIdentity.earfcn
+                        val band = getLteBand(earfcn)
+                        if (band != "--") "B$band ($earfcn)" else "EARFCN $earfcn"
+                    } else {
+                        "LTE"
+                    }
                 }
                 else -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && registeredCell is android.telephony.CellInfoNr) {
@@ -522,11 +532,19 @@ class TelephonyService(private val context: Context) {
                         val band = getNrBand(nrarfcn)
                         if (band != "--") "n$band ($nrarfcn)" else "ARFCN $nrarfcn"
                     } else if (registeredCell is android.telephony.CellInfoWcdma) {
-                        val uarfcn = registeredCell.cellIdentity.uarfcn
-                        "U$uarfcn"
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            val uarfcn = registeredCell.cellIdentity.uarfcn
+                            "U$uarfcn"
+                        } else {
+                            "WCDMA"
+                        }
                     } else if (registeredCell is android.telephony.CellInfoGsm) {
-                        val arfcn = registeredCell.cellIdentity.arfcn
-                        "GSM $arfcn"
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            val arfcn = registeredCell.cellIdentity.arfcn
+                            "GSM $arfcn"
+                        } else {
+                            "GSM"
+                        }
                     } else "--"
                 }
             }
@@ -699,13 +717,38 @@ class TelephonyService(private val context: Context) {
                         }
                     }
                 }.maxByOrNull { 
-                    it.cellSignalStrength.dbm
+                    val info = it
+                    when (info) {
+                        is android.telephony.CellInfoLte -> info.cellSignalStrength.dbm
+                        is android.telephony.CellInfoWcdma -> info.cellSignalStrength.dbm
+                        is android.telephony.CellInfoGsm -> info.cellSignalStrength.dbm
+                        else -> {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info is android.telephony.CellInfoNr) {
+                                (info.cellSignalStrength as android.telephony.CellSignalStrengthNr).dbm
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                info.cellSignalStrength.dbm
+                            } else Int.MIN_VALUE
+                        }
+                    }
                 }
             }
             
             // 3. Last Fallback: Strongest available
             if (cell == null) {
-                cell = cellInfoList.maxByOrNull { it.cellSignalStrength.dbm }
+                cell = cellInfoList.maxByOrNull { info ->
+                    when (info) {
+                        is android.telephony.CellInfoLte -> info.cellSignalStrength.dbm
+                        is android.telephony.CellInfoWcdma -> info.cellSignalStrength.dbm
+                        is android.telephony.CellInfoGsm -> info.cellSignalStrength.dbm
+                        else -> {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info is android.telephony.CellInfoNr) {
+                                (info.cellSignalStrength as android.telephony.CellSignalStrengthNr).dbm
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                info.cellSignalStrength.dbm
+                            } else Int.MIN_VALUE
+                        }
+                    }
+                }
             }
 
             return cell

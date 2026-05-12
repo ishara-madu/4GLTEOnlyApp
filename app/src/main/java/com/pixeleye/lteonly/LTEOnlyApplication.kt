@@ -41,8 +41,11 @@ class LTEOnlyApplication : Application(), Application.ActivityLifecycleCallbacks
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 
-    override fun onStart(owner: LifecycleOwner) {
-        super<DefaultLifecycleObserver>.onStart(owner)
+    override fun onResume(owner: LifecycleOwner) {
+        super<DefaultLifecycleObserver>.onResume(owner)
+        // Refresh entitlement status whenever app returns to foreground
+        ProStateManager.checkEntitlement()
+
         // Skip App Open Ad entirely for Pro users
         if (ProStateManager.isUserPro.value) return
         // Show App Open Ad when app returns to foreground

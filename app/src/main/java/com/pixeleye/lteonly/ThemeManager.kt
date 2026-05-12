@@ -4,27 +4,39 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
 import com.pixeleye.lteonly.ui.theme.*
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 enum class AppTheme {
     LIGHT, DARK, SYSTEM
 }
 
-class ThemeManager private constructor(context: Context) {
+class ThemeManager private constructor(private val context: Context) {
     
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
     
-    private val _themeFlow = MutableStateFlow(getSavedTheme())
+    private val _themeFlow = MutableStateFlow(AppTheme.SYSTEM)
     val themeFlow: StateFlow<AppTheme> = _themeFlow.asStateFlow()
+
+    init {
+        CoroutineScope(Dispatchers.IO).launch {
+            _themeFlow.value = getSavedTheme()
+        }
+    }
     
     var currentTheme: AppTheme
         get() = _themeFlow.value
         set(value) {
-            prefs.edit().putString(KEY_THEME, value.name).apply()
             _themeFlow.value = value
+            CoroutineScope(Dispatchers.IO).launch {
+                prefs.edit().putString(KEY_THEME, value.name).apply()
+            }
         }
         
     private fun getSavedTheme(): AppTheme {

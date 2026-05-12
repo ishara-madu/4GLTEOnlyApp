@@ -42,6 +42,8 @@ object ProStateManager {
                 if (isPro && !wasPro) {
                     Log.d(TAG, "User upgraded to Pro — clearing all ads")
                     AdManager.clearAllAds()
+                } else if (!isPro && wasPro) {
+                    Log.d(TAG, "User subscription expired — revoking Pro status")
                 }
             }
         )
