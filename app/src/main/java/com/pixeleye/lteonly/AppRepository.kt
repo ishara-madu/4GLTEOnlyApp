@@ -26,8 +26,8 @@ class AppRepository(private val context: Context) {
     
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val sevenDaysAgo = System.currentTimeMillis() - (7L * 24 * 60 * 60 * 1000)
-    private val GENERAL_LIMIT = 20
-    private val SPEED_TEST_LIMIT = 15
+    private val GENERAL_LIMIT = 100
+    private val SPEED_TEST_LIMIT = 100
     
     private val _recentSignalHistory = MutableStateFlow<List<SignalHistoryEntity>>(emptyList())
     val recentSignalHistory: StateFlow<List<SignalHistoryEntity>> = _recentSignalHistory.asStateFlow()

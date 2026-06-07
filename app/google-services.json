@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "471743229609",
+    "project_id": "lte-only-34960",
+    "storage_bucket": "lte-only-34960.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:471743229609:android:66b14bcf1818a614ed43b8",
+        "android_client_info": {
+          "package_name": "com.pixeleye.lteonly"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0KGLhJTlUx6qRPzPjxcuaW7sYjvFmAEk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

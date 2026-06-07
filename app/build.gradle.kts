@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 import java.util.Properties
@@ -22,20 +23,22 @@ android {
         applicationId = "com.pixeleye.lteonly"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.8"
+        versionCode = 12
+        versionName = "2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // BuildConfig fields from local.properties
         val revenueCatKey = localProperties.getProperty("REVENUECAT_API_KEY") ?: ""
         val admobAppId = localProperties.getProperty("ADMOB_APP_ID") ?: ""
-        val admobInterstitialId = localProperties.getProperty("ADMOB_INTERSTITIAL_ID") ?: ""
+        val admobRewardedId = localProperties.getProperty("ADMOB_REWARDED_ID") ?: ""
+        val admobRewardedInterstitialId = localProperties.getProperty("ADMOB_REWARDED_INTERSTITIAL_ID") ?: ""
         val admobAppOpenId = localProperties.getProperty("ADMOB_APP_OPEN_ID") ?: ""
         val admobBannerId = localProperties.getProperty("ADMOB_BANNER_ID") ?: ""
 
         buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
-        buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"$admobInterstitialId\"")
+        buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobRewardedId\"")
+        buildConfigField("String", "ADMOB_REWARDED_INTERSTITIAL_ID", "\"$admobRewardedInterstitialId\"")
         buildConfigField("String", "ADMOB_APP_OPEN_ID", "\"$admobAppOpenId\"")
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$admobBannerId\"")
         
@@ -62,10 +65,14 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+        freeCompilerArgs = freeCompilerArgs + "-Xskip-metadata-version-check"
     }
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    androidResources {
+        localeFilters.addAll(listOf("en", "si"))
     }
 }
 
@@ -87,7 +94,14 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.play.services.ads)
     implementation("com.google.android.play:review-ktx:2.0.1")
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
     implementation("com.revenuecat.purchases:purchases:10.2.0")
+
+    // Firebase BoM and In-App Messaging
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.inappmessaging.display)
+    implementation(libs.firebase.analytics)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -60,6 +60,16 @@ import com.pixeleye.lteonly.ui.theme.*
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.getCustomerInfoWith
 import com.google.android.play.core.review.ReviewManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
+import android.app.Activity.RESULT_OK
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
@@ -72,10 +82,24 @@ import androidx.compose.ui.graphics.nativeCanvas
 
 class MainActivity : ComponentActivity() {
     private lateinit var themeManager: ThemeManager
+    private lateinit var appUpdateManager: AppUpdateManager
+    private val updateType = AppUpdateType.IMMEDIATE
+
+    private val updateLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) {
+            android.util.Log.e("MainActivity", "Update flow failed! Result code: ${result.resultCode}")
+            // If the update is cancelled or fails, you can request to start the update again.
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         themeManager = ThemeManager.getInstance(this)
+        appUpdateManager = AppUpdateManagerFactory.create(this)
+
+        checkForAppUpdates()
 
         setContent {
             val theme by themeManager.themeFlow.collectAsStateWithLifecycle()
@@ -88,8 +112,45 @@ class MainActivity : ComponentActivity() {
 
             com.pixeleye.lteonly.ui.theme.globalIsDarkTheme = darkTheme
 
+            var showSplash by rememberSaveable { mutableStateOf(true) }
+
             ForceLTEOnlyTheme(darkTheme = darkTheme) {
-                DashboardScreen(themeManager)
+                if (showSplash) {
+                    SplashScreen(onSplashComplete = { showSplash = false })
+                } else {
+                    DashboardScreen(themeManager)
+                }
+            }
+        }
+    }
+
+    private fun checkForAppUpdates() {
+        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                && appUpdateInfo.isUpdateTypeAllowed(updateType)
+            ) {
+                appUpdateManager.startUpdateFlowForResult(
+                    appUpdateInfo,
+                    updateLauncher,
+                    AppUpdateOptions.newBuilder(updateType).build()
+                )
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::appUpdateManager.isInitialized) {
+            appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                    // If an in-app update is already running, resume the update.
+                    appUpdateManager.startUpdateFlowForResult(
+                        appUpdateInfo,
+                        updateLauncher,
+                        AppUpdateOptions.newBuilder(updateType).build()
+                    )
+                }
             }
         }
     }
@@ -103,7 +164,10 @@ fun DashboardScreen(themeManager: ThemeManager) {
 
     // Pro state from RevenueCat
     val isUserPro by ProStateManager.isUserPro.collectAsStateWithLifecycle()
+    val isPremiumPro by ProStateManager.isPremiumPro.collectAsStateWithLifecycle()
     var showPaywall by remember { mutableStateOf(false) }
+
+
 
     var hasPermission by remember { mutableStateOf(false) }
     var networkInfo by remember { mutableStateOf(NetworkInfo()) }
@@ -215,13 +279,41 @@ fun DashboardScreen(themeManager: ThemeManager) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(NeumorphicBackground)
-            .padding(statusBarPadding)
-    ) {
+    LaunchedEffect(selectedTab) {
+        val analytics = com.google.firebase.analytics.FirebaseAnalytics.getInstance(context)
         when (selectedTab) {
+            1 -> analytics.logEvent("analytics_tab_viewed", null)
+            2 -> analytics.logEvent("tools_tab_viewed", null)
+        }
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = NeumorphicBackground,
+        contentWindowInsets = WindowInsets.statusBars,
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .background(NeumorphicBackground)
+                    .navigationBarsPadding()
+            ) {
+                // Hide banner ad for pro users
+                if (!isPremiumPro) {
+                    BannerAd()
+                }
+                NeumorphicBottomBar(
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it }
+                )
+            }
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            when (selectedTab) {
             0 -> HomeTab(
                 networkInfo = networkInfo,
                 telephonyService = telephonyService,
@@ -303,19 +395,6 @@ fun DashboardScreen(themeManager: ThemeManager) {
             3 -> SettingsTab(themeManager, context)
         }
 
-        Column(
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            // Hide banner ad for pro users
-            if (!isUserPro) {
-                BannerAd()
-            }
-            NeumorphicBottomBar(
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
-            )
-        }
-
         // Paywall dialog
         if (showPaywall) {
             PremiumUpgradeScreen(onDismiss = { showPaywall = false })
@@ -325,6 +404,9 @@ fun DashboardScreen(themeManager: ThemeManager) {
             HowToUseBottomSheet(onDismiss = { showHowToUseSheet = false })
         }
     }
+    }
+
+
 }
 
 @Composable
@@ -428,6 +510,29 @@ fun HomeTab(
     val scrollState = rememberScrollState()
     var showDeviceCodesSheet by remember { mutableStateOf(false) }
     var pendingReviewTrigger by remember { mutableStateOf(false) }
+    var isWaitingForAd by remember { mutableStateOf(false) }
+    var showAdConsentDialog by remember { mutableStateOf(false) }
+    var showLoadErrorDialog by remember { mutableStateOf(false) }
+
+    val isPremiumPro by ProStateManager.isPremiumPro.collectAsStateWithLifecycle()
+    val isTempProActive by ProStateManager.isTempProActive.collectAsStateWithLifecycle()
+    val remainingPasses by ProStateManager.remainingPasses.collectAsStateWithLifecycle()
+
+    var tempProMinutesLeft by remember { mutableLongStateOf(0) }
+    LaunchedEffect(isTempProActive) {
+        if (isTempProActive) {
+            while (isActive) {
+                val prefs = context.getSharedPreferences("temp_pro_prefs", Context.MODE_PRIVATE)
+                val expiryTime = prefs.getLong("temp_pro_expiry", 0)
+                val diff = expiryTime - System.currentTimeMillis()
+                tempProMinutesLeft = (diff / 60000).coerceAtLeast(0)
+                if (tempProMinutesLeft <= 0) {
+                    ProStateManager.checkTempProExpiry(context)
+                }
+                delay(10000)
+            }
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -456,7 +561,7 @@ fun HomeTab(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(start = 24.dp, end = 24.dp, bottom = 140.dp),
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -517,6 +622,7 @@ fun HomeTab(
                 pendingReviewTrigger = true
                 val activity = context as? android.app.Activity
                 val openInfo = {
+                    isWaitingForAd = false
                     try {
                         RadioInfoHelper.openRadioInfo(context)
                     } catch (e: Exception) {
@@ -524,10 +630,8 @@ fun HomeTab(
                     }
                 }
 
-                if (activity != null && !isUserPro) {
-                    AdManager.showInterstitial(activity) {
-                        openInfo()
-                    }
+                if (activity != null && !isPremiumPro) {
+                    isWaitingForAd = true
                 } else {
                     openInfo()
                 }
@@ -535,8 +639,48 @@ fun HomeTab(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Upgrade to Pro banner — hidden for pro users
+            // Show countdown if temporary Pro is active
+            if (isTempProActive && !isPremiumPro) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF00B0FF), Color(0xFF00E5FF)),
+                                start = Offset.Zero,
+                                end = Offset(400f, 0f)
+                            )
+                        )
+                        .padding(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "✨ Pro Preview Active",
+                                style = Typography.titleMedium.copy(fontSize = 18.sp),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "All premium tools unlocked. Remaining time: $tempProMinutesLeft min.",
+                                style = Typography.bodyMedium.copy(fontSize = 13.sp),
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+
+            // Upgrade to Pro / Watch ad to try Pro — hidden for permanent/temporary pro users
             if (!isUserPro) {
+                // Upgrade to Pro Banner
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -578,16 +722,562 @@ fun HomeTab(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Watch Ad to Try Pro Card
+                var isWaitingForTempProAd by remember { mutableStateOf(false) }
+                var showTempProConsentDialog by remember { mutableStateOf(false) }
+
+                if (remainingPasses > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = GradientColors,
+                                    start = Offset.Zero,
+                                    end = Offset(400f, 0f)
+                                )
+                            )
+                            .clickable {
+                                val activity = context as? android.app.Activity
+                                if (activity != null) {
+                                    showTempProConsentDialog = true
+                                }
+                            }
+                            .padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🎁 Watch Ad to Try Pro",
+                                    style = Typography.titleMedium.copy(fontSize = 18.sp),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Get 5 mins of Pro access for free. ($remainingPasses left today)",
+                                    style = Typography.bodyMedium.copy(fontSize = 13.sp),
+                                    color = Color.White.copy(alpha = 0.9f)
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Try Pro",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(NeumorphicBackground)
+                            .neumorphic(cornerRadius = 20.dp, elevation = 2.dp)
+                            .padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🎁 Watch Ad to Try Pro",
+                                    style = Typography.titleMedium.copy(fontSize = 17.sp),
+                                    color = TextSecondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "No passes left for today. Come back tomorrow!",
+                                    style = Typography.bodyMedium.copy(fontSize = 12.sp),
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isWaitingForTempProAd) {
+                    val activity = context as? android.app.Activity
+                    LaunchedEffect(Unit) {
+                        if (activity != null) {
+                            if (!AdManager.isRewardedAdAvailable() && !AdManager.isRewardedAdLoading()) {
+                                AdManager.loadRewarded(activity)
+                            }
+                            val startTime = System.currentTimeMillis()
+                            var adShownSuccess = false
+                            while (System.currentTimeMillis() - startTime < 20000) {
+                                if (AdManager.isRewardedAdAvailable()) {
+                                    AdManager.showRewarded(
+                                        activity = activity,
+                                        onAdShowed = { isWaitingForTempProAd = false },
+                                        onRewardEarned = {
+                                            adShownSuccess = true
+                                            ProStateManager.activateTempPro(context)
+                                            Toast.makeText(context, "Pro Preview Unlocked for 5 minutes!", Toast.LENGTH_LONG).show()
+                                        }
+                                    )
+                                    return@LaunchedEffect
+                                }
+                                delay(100)
+                            }
+                            isWaitingForTempProAd = false
+                            if (!adShownSuccess) {
+                                showLoadErrorDialog = true
+                            }
+                        }
+                    }
+
+                    // Loading Dialog for ad
+                    Dialog(
+                        onDismissRequest = {},
+                        properties = androidx.compose.ui.window.DialogProperties(
+                            dismissOnBackPress = false,
+                            dismissOnClickOutside = false,
+                            usePlatformDefaultWidth = false
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .shadow(12.dp, RoundedCornerShape(24.dp))
+                                    .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+                                    .padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(color = TextTeal, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Text(text = "Preparing Ad...", fontFamily = PoppinsFamily, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                            }
+                        }
+                    }
+                }
+
+                if (showTempProConsentDialog) {
+                    Dialog(
+                        onDismissRequest = { showTempProConsentDialog = false },
+                        properties = androidx.compose.ui.window.DialogProperties(
+                            usePlatformDefaultWidth = false
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f))
+                                .clickable { showTempProConsentDialog = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .shadow(12.dp, RoundedCornerShape(24.dp))
+                                    .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+                                    .clickable(enabled = false) {} // Prevent click-through
+                                    .padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Watch Video",
+                                    fontFamily = PoppinsFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp,
+                                    color = TextPrimary,
+                                    textAlign = TextAlign.Center
+                                )
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Text(
+                                    text = "Do you want to watch a short video ad to unlock Pro features for 5 minutes?",
+                                    fontFamily = PoppinsFamily,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    color = TextSecondary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 20.sp
+                                )
+                                
+                                Spacer(modifier = Modifier.height(24.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    // Cancel Button
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(NeumorphicBackground, RoundedCornerShape(12.dp))
+                                            .clickable { showTempProConsentDialog = false },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Cancel",
+                                            fontFamily = PoppinsFamily,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+
+                                    // Watch Ad Button
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                brush = Brush.linearGradient(GradientColors),
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable {
+                                                showTempProConsentDialog = false
+                                                isWaitingForTempProAd = true
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Watch Ad",
+                                            fontFamily = PoppinsFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
             DataSpeedCard(speedInfo = networkInfo.speedInfo, context = context)
             
-            Spacer(modifier = Modifier.height(70.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         if (showDeviceCodesSheet) {
             DeviceCodesBottomSheet(onDismiss = { showDeviceCodesSheet = false })
+        }
+
+        if (isWaitingForAd) {
+            val activity = context as? android.app.Activity
+            LaunchedEffect(Unit) {
+                if (activity != null) {
+                    if (!AdManager.isRewardedInterstitialAdAvailable() && !AdManager.isRewardedInterstitialAdLoading()) {
+                        AdManager.loadRewardedInterstitial(activity)
+                    }
+                }
+                
+                // Provide sufficient time (3.5s) for the user to read the intro screen and opt-out if desired.
+                delay(3500)
+                
+                val startTime = System.currentTimeMillis()
+                var adShownSuccess = false
+                while (System.currentTimeMillis() - startTime < 16500) {
+                    if (AdManager.isRewardedInterstitialAdAvailable()) {
+                        if (activity != null) {
+                            AdManager.showRewardedInterstitial(
+                                activity = activity,
+                                onAdShowed = { isWaitingForAd = false },
+                                onRewardEarned = {
+                                    adShownSuccess = true
+                                    try {
+                                        RadioInfoHelper.openRadioInfo(context)
+                                    } catch (e: Exception) {
+                                        showDeviceCodesSheet = true
+                                    }
+                                }
+                            )
+                        }
+                        return@LaunchedEffect
+                    }
+                    if (!AdManager.isRewardedInterstitialAdLoading() && !AdManager.isRewardedInterstitialAdAvailable() && activity != null) {
+                        AdManager.loadRewardedInterstitial(activity)
+                    }
+                    delay(200)
+                }
+                isWaitingForAd = false
+                if (!adShownSuccess) {
+                    try {
+                        RadioInfoHelper.openRadioInfo(context)
+                    } catch (e: Exception) {
+                        showDeviceCodesSheet = true
+                    }
+                }
+            }
+
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { /* Prevent dismiss */ },
+                properties = androidx.compose.ui.window.DialogProperties(
+                    dismissOnBackPress = false,
+                    dismissOnClickOutside = false,
+                    usePlatformDefaultWidth = false
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .shadow(12.dp, RoundedCornerShape(24.dp))
+                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+                            .padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(
+                            color = TextTeal,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(20.dp))
+                        
+                        Text(
+                            text = "Preparing Settings...",
+                            fontFamily = PoppinsFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = TextPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text(
+                            text = "Please wait while we prepare your optimal network settings.",
+                            fontFamily = PoppinsFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(NeumorphicBackground, RoundedCornerShape(12.dp))
+                                .clickable { isWaitingForAd = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Cancel",
+                                fontFamily = PoppinsFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showAdConsentDialog) {
+            Dialog(
+                onDismissRequest = { showAdConsentDialog = false },
+                properties = androidx.compose.ui.window.DialogProperties(
+                    usePlatformDefaultWidth = false
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable { showAdConsentDialog = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .shadow(12.dp, RoundedCornerShape(24.dp))
+                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+                            .clickable(enabled = false) {} // Prevent click-through
+                            .padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Watch Video to Unlock",
+                            fontFamily = PoppinsFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = TextPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text(
+                            text = "To access advanced network settings, please watch a short video ad. This supports our free service.",
+                            fontFamily = PoppinsFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Cancel Button
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(NeumorphicBackground, RoundedCornerShape(12.dp))
+                                    .clickable { showAdConsentDialog = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Cancel",
+                                    fontFamily = PoppinsFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = TextSecondary
+                                )
+                            }
+
+                            // Watch Ad Button
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        brush = Brush.linearGradient(GradientColors),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        showAdConsentDialog = false
+                                        val activity = context as? android.app.Activity
+                                        if (activity != null) {
+                                            if (!AdManager.isRewardedAdAvailable() && !AdManager.isRewardedAdLoading()) {
+                                                AdManager.loadRewarded(activity)
+                                            }
+                                            isWaitingForAd = true
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Watch Video",
+                                    fontFamily = PoppinsFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showLoadErrorDialog) {
+            Dialog(
+                onDismissRequest = { showLoadErrorDialog = false },
+                properties = androidx.compose.ui.window.DialogProperties(
+                    usePlatformDefaultWidth = false
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable { showLoadErrorDialog = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .shadow(12.dp, RoundedCornerShape(24.dp))
+                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+                            .clickable(enabled = false) {}
+                            .padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Connection Timeout",
+                            fontFamily = PoppinsFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = TextPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text(
+                            text = "We couldn't load the ad in time. Please check your internet connection and try again.",
+                            fontFamily = PoppinsFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        // OK Button
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    brush = Brush.linearGradient(GradientColors),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { showLoadErrorDialog = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "OK",
+                                fontFamily = PoppinsFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -617,7 +1307,7 @@ fun AnalyticsTab(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState, enabled = isUserPro)
-                .padding(start = 24.dp, end = 24.dp, bottom = 140.dp)
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
                 .then(if (!isUserPro) Modifier.blur(15.dp) else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -717,7 +1407,7 @@ fun AnalyticsTab(
                 }
             }
 
-            Spacer(modifier = Modifier.height(70.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         // Lock overlay for non-pro users
@@ -730,7 +1420,9 @@ fun AnalyticsTab(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 48.dp)
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 48.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -864,7 +1556,7 @@ fun ToolsTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(start = 24.dp, end = 24.dp, bottom = 140.dp),
+            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -1070,7 +1762,7 @@ fun ToolsTab(
             }
         }
         
-        Spacer(modifier = Modifier.height(70.dp))
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -1089,28 +1781,108 @@ private fun SpeedColumn(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 private fun PingHistoryChart(history: List<Int>, modifier: Modifier = Modifier) {
     if (history.isEmpty()) return
 
-    val maxLatency = history.maxOrNull() ?: 1
-    val normalizedHistory = history.map { (it.toFloat() / maxLatency).coerceIn(0.1f, 1f) }
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
 
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val barWidth = width / history.size
+    val animationProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        label = "PingChartAnimation"
+    )
 
-        normalizedHistory.forEachIndexed { index, value ->
-            val barHeight = height * value
-            val x = index * barWidth
-            val color = when {
-                history[index] < 50 -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
-                history[index] < 100 -> androidx.compose.ui.graphics.Color(0xFFFF9800)
-                else -> androidx.compose.ui.graphics.Color(0xFFFF5722)
+    BoxWithConstraints(modifier = modifier) {
+        val scrollState = rememberScrollState()
+        val minWidth = maxWidth
+        val itemWidth = 30.dp
+        val requiredWidth = maxOf(minWidth, itemWidth * history.size)
+
+        Box(modifier = Modifier.horizontalScroll(scrollState)) {
+            Canvas(modifier = Modifier.width(requiredWidth).fillMaxHeight()) {
+                val width = size.width
+                val height = size.height
+                val xPadding = if (history.size > 1) 20f else width / 2f
+                val chartWidth = if (history.size > 1) width - (xPadding * 2) else width
+                
+                val maxPing = (history.maxOrNull() ?: 100).coerceAtLeast(100).toFloat()
+                val yRange = maxPing * 1.2f // Add 20% headroom
+
+                val coords = history.mapIndexed { index, ping ->
+                    val x = if (history.size == 1) xPadding else xPadding + (index.toFloat() / (history.size - 1)) * chartWidth
+                    val y = height - ((ping.toFloat() / yRange) * height)
+                    Offset(x, y)
+                }
+
+                if (coords.size >= 2) {
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(coords[0].x, coords[0].y)
+                        for (i in 0 until coords.size - 1) {
+                            val p1 = coords[i]
+                            val p2 = coords[i + 1]
+                            val cp1x = (p1.x + p2.x) / 2f
+                            val cp1y = p1.y
+                            val cp2x = (p1.x + p2.x) / 2f
+                            val cp2y = p2.y
+                            cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+                        }
+                    }
+
+                    clipRect(right = width * animationProgress) {
+                        val fillPath = androidx.compose.ui.graphics.Path().apply {
+                            addPath(path)
+                            lineTo(coords.last().x, height)
+                            lineTo(coords.first().x, height)
+                            close()
+                        }
+
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(androidx.compose.ui.graphics.Color(0xFF8E99F3).copy(alpha = 0.5f), Color.Transparent)
+                            )
+                        )
+
+                        drawPath(
+                            path = path,
+                            color = androidx.compose.ui.graphics.Color(0xFF8E99F3),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 3.dp.toPx(),
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                        )
+
+                        coords.forEachIndexed { index, coord ->
+                            val color = when {
+                                history[index] < 50 -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                history[index] < 100 -> androidx.compose.ui.graphics.Color(0xFFFF9800)
+                                else -> androidx.compose.ui.graphics.Color(0xFFFF5722)
+                            }
+                            drawCircle(color = color, radius = 5.dp.toPx(), center = coord)
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.4f),
+                                radius = 8.dp.toPx(),
+                                center = coord,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                            )
+                        }
+                    }
+                } else if (coords.size == 1) {
+                    val coord = coords[0]
+                    clipRect(right = width * animationProgress) {
+                        val color = when {
+                            history[0] < 50 -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                            history[0] < 100 -> androidx.compose.ui.graphics.Color(0xFFFF9800)
+                            else -> androidx.compose.ui.graphics.Color(0xFFFF5722)
+                        }
+                        drawCircle(color = color, radius = 8.dp.toPx(), center = coord)
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.4f),
+                            radius = 12.dp.toPx(),
+                            center = coord,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        )
+                    }
+                }
             }
-            drawRoundRect(
-                color = color,
-                topLeft = androidx.compose.ui.geometry.Offset(x + 2, height - barHeight),
-                size = androidx.compose.ui.geometry.Size(barWidth - 4, barHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
-            )
         }
     }
 }
@@ -1123,29 +1895,64 @@ private fun SpeedHistoryChart(history: List<SpeedTestEntity>, modifier: Modifier
     val maxUpload = history.maxOfOrNull { it.uploadSpeed }?.toFloat() ?: 1f
     val maxSpeed = maxOf(maxDownload, maxUpload, 1f)
 
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val barWidth = width / history.size
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
 
-        history.forEachIndexed { index, test ->
-            val downHeight = height * ((test.downloadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
-            val upHeight = height * ((test.uploadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
-            val x = index * barWidth
+    val animationProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        label = "SpeedChartAnimation"
+    )
 
-            drawRoundRect(
-                color = androidx.compose.ui.graphics.Color(0xFF8E99F3),
-                topLeft = androidx.compose.ui.geometry.Offset(x + 2f, height - downHeight),
-                size = androidx.compose.ui.geometry.Size((barWidth / 2f) - 2f, downHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
-            )
+    BoxWithConstraints(modifier = modifier) {
+        val scrollState = rememberScrollState()
+        val minWidth = maxWidth
+        val itemWidth = 40.dp
+        val requiredWidth = maxOf(minWidth, itemWidth * history.size)
 
-            drawRoundRect(
-                color = androidx.compose.ui.graphics.Color(0xFF5C6BC0),
-                topLeft = androidx.compose.ui.geometry.Offset(x + (barWidth / 2f), height - upHeight),
-                size = androidx.compose.ui.geometry.Size((barWidth / 2f) - 2f, upHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
-            )
+        Box(modifier = Modifier.horizontalScroll(scrollState)) {
+            Canvas(modifier = Modifier.width(requiredWidth).fillMaxHeight()) {
+                val width = size.width
+                val height = size.height
+                val barWidth = width / history.size
+
+                history.forEachIndexed { index, test ->
+                    val targetDownHeight = height * ((test.downloadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
+                    val targetUpHeight = height * ((test.uploadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
+                    
+                    val downHeight = targetDownHeight * animationProgress
+                    val upHeight = targetUpHeight * animationProgress
+                    val x = index * barWidth
+
+                    val downGradient = Brush.verticalGradient(
+                        colors = listOf(androidx.compose.ui.graphics.Color(0xFF8E99F3), androidx.compose.ui.graphics.Color(0xFF8E99F3).copy(alpha = 0.5f)),
+                        startY = height - downHeight,
+                        endY = height
+                    )
+
+                    val upGradient = Brush.verticalGradient(
+                        colors = listOf(androidx.compose.ui.graphics.Color(0xFF5C6BC0), androidx.compose.ui.graphics.Color(0xFF5C6BC0).copy(alpha = 0.5f)),
+                        startY = height - upHeight,
+                        endY = height
+                    )
+
+                    val halfBarWidth = (barWidth / 2f) - 4f
+                    
+                    drawRoundRect(
+                        brush = downGradient,
+                        topLeft = androidx.compose.ui.geometry.Offset(x + 2f, height - downHeight),
+                        size = androidx.compose.ui.geometry.Size(halfBarWidth, downHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(halfBarWidth / 2f, halfBarWidth / 2f)
+                    )
+
+                    drawRoundRect(
+                        brush = upGradient,
+                        topLeft = androidx.compose.ui.geometry.Offset(x + (barWidth / 2f) + 2f, height - upHeight),
+                        size = androidx.compose.ui.geometry.Size(halfBarWidth, upHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(halfBarWidth / 2f, halfBarWidth / 2f)
+                    )
+                }
+            }
         }
     }
 }
@@ -1173,7 +1980,7 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(start = 24.dp, end = 24.dp, bottom = 140.dp),
+            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -1996,60 +2803,105 @@ private fun SignalHistoryChart(history: List<Int>, modifier: Modifier = Modifier
         return
     }
 
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val minRsrp = -140f
-        val maxRsrp = -60f
-        val range = maxRsrp - minRsrp
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
 
-        val points = history.mapIndexed { index, rsrp ->
-            val x = (index.toFloat() / (history.size - 1).coerceAtLeast(1)) * width
-            val normalizedY = ((rsrp - minRsrp) / range).coerceIn(0f, 1f)
-            val y = height - (normalizedY * height)
-            Offset(x, y)
-        }
+    val animationProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "SignalChartAnimation"
+    )
 
-        if (points.size >= 2) {
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(points[0].x, points[0].y)
-                for (i in 1 until points.size) {
-                    lineTo(points[i].x, points[i].y)
+    BoxWithConstraints(modifier = modifier) {
+        val scrollState = rememberScrollState()
+        val minWidth = maxWidth
+        val itemWidth = 30.dp
+        val requiredWidth = maxOf(minWidth, itemWidth * history.size)
+
+        Box(modifier = Modifier.horizontalScroll(scrollState)) {
+            Canvas(modifier = Modifier.width(requiredWidth).fillMaxHeight()) {
+                val width = size.width
+                val height = size.height
+                val minRsrp = -140f
+                val maxRsrp = -60f
+                val range = maxRsrp - minRsrp
+
+                val points = history.mapIndexed { index, rsrp ->
+                    val x = (index.toFloat() / (history.size - 1).coerceAtLeast(1)) * width
+                    val normalizedY = ((rsrp - minRsrp) / range).coerceIn(0f, 1f)
+                    val y = height - (normalizedY * height)
+                    Offset(x, y)
+                }
+
+                if (points.size >= 2) {
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(points[0].x, points[0].y)
+                        for (i in 0 until points.size - 1) {
+                            val p1 = points[i]
+                            val p2 = points[i + 1]
+                            val cp1x = (p1.x + p2.x) / 2f
+                            val cp1y = p1.y
+                            val cp2x = (p1.x + p2.x) / 2f
+                            val cp2y = p2.y
+                            cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+                        }
+                    }
+
+                    clipRect(right = width * animationProgress) {
+                        val fillPath = androidx.compose.ui.graphics.Path().apply {
+                            addPath(path)
+                            lineTo(points.last().x, height)
+                            lineTo(points.first().x, height)
+                            close()
+                        }
+
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(color.copy(alpha = 0.5f), Color.Transparent)
+                            )
+                        )
+
+                        drawPath(
+                            path = path,
+                            color = color,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 3.dp.toPx(),
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                        )
+
+                        points.forEach { point ->
+                            drawCircle(
+                                color = color,
+                                radius = 4.dp.toPx(),
+                                center = point
+                            )
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.3f),
+                                radius = 7.dp.toPx(),
+                                center = point,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                            )
+                        }
+                    }
+                } else if (points.size == 1) {
+                    val point = points[0]
+                    clipRect(right = width * animationProgress) {
+                        drawCircle(color = color, radius = 6.dp.toPx(), center = point)
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.3f),
+                            radius = 10.dp.toPx(),
+                            center = point,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        )
+                    }
                 }
             }
-
-            val fillPath = androidx.compose.ui.graphics.Path().apply {
-                addPath(path)
-                lineTo(points.last().x, height)
-                lineTo(points.first().x, height)
-                close()
-            }
-
-            drawPath(
-                path = fillPath,
-                brush = Brush.verticalGradient(
-                    colors = listOf(color.copy(alpha = 0.4f), Color.Transparent)
-                )
-            )
-
-            drawPath(
-                path = path,
-                color = color,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-            )
-
-            for (point in points) {
-                drawCircle(
-                    color = color,
-                    radius = 4.dp.toPx(),
-                    center = point
-                )
-            }
-        }
-    }
-}
-
-@Composable
+       @Composable
 private fun SpeedTestBarChart(
     speedTests: List<SpeedTestEntity>,
     onTestClick: (SpeedTestEntity) -> Unit
@@ -2058,60 +2910,83 @@ private fun SpeedTestBarChart(
 
     val maxSpeed = speedTests.maxOfOrNull { maxOf(it.downloadSpeed, it.uploadSpeed) } ?: 1.0
 
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(80.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            speedTests.forEachIndexed { index, test ->
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        val downloadHeight = if (maxSpeed > 0) (test.downloadSpeed / maxSpeed).toFloat() else 0f
-                        val uploadHeight = if (maxSpeed > 0) (test.uploadSpeed / maxSpeed).toFloat() else 0f
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
 
-                        Box(
-                            modifier = Modifier
-                                .width(8.dp)
-                                .fillMaxHeight(downloadHeight.coerceIn(0.05f, 1f))
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(GradientStart)
-                                .clickable { onTestClick(test) }
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(8.dp)
-                                .fillMaxHeight(uploadHeight.coerceIn(0.05f, 1f))
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(GradientEnd)
-                                .clickable { onTestClick(test) }
+    val animationProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        label = "SpeedTestBarChartAnimation"
+    )
+
+    BoxWithConstraints {
+        val scrollState = rememberScrollState()
+        val minWidth = maxWidth
+        val itemWidth = 40.dp
+        val requiredWidth = maxOf(minWidth, itemWidth * speedTests.size)
+
+        Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState)) {
+            Column(modifier = Modifier.width(requiredWidth)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    speedTests.forEachIndexed { index, test ->
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxHeight(),
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                val targetDownloadHeight = if (maxSpeed > 0) (test.downloadSpeed / maxSpeed).toFloat() else 0f
+                                val targetUploadHeight = if (maxSpeed > 0) (test.uploadSpeed / maxSpeed).toFloat() else 0f
+
+                                val downloadHeight = (targetDownloadHeight.coerceIn(0.05f, 1f) * animationProgress)
+                                val uploadHeight = (targetUploadHeight.coerceIn(0.05f, 1f) * animationProgress)
+
+                                Box(
+                                    modifier = Modifier
+                                        .width(8.dp)
+                                        .fillMaxHeight(downloadHeight)
+                                        .clip(RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp))
+                                        .background(Brush.verticalGradient(listOf(GradientStart, GradientStart.copy(alpha = 0.5f))))
+                                        .clickable { onTestClick(test) }
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .width(8.dp)
+                                        .fillMaxHeight(uploadHeight)
+                                        .clip(RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp))
+                                        .background(Brush.verticalGradient(listOf(GradientEnd, GradientEnd.copy(alpha = 0.5f))))
+                                        .clickable { onTestClick(test) }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    speedTests.forEachIndexed { index, _ ->
+                        Text(
+                            text = "${index + 1}",
+                            style = Typography.labelMedium.copy(fontSize = 8.sp),
+                            color = TextSecondary,
+                            modifier = Modifier.weight(1f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            speedTests.forEachIndexed { index, _ ->
-                Text(
-                    text = "${index + 1}",
-                    style = Typography.labelMedium.copy(fontSize = 8.sp),
-                    color = TextSecondary,
-                    modifier = Modifier.weight(1f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
-        }
+    }
+}      }
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2918,6 +3793,15 @@ fun MultiLinePingChart(servers: List<GameServer>) {
         }
     }
 
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
+
+    val animationProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        label = "MultiPingAnimation"
+    )
+
     Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
         val width = size.width
         val height = size.height
@@ -2957,48 +3841,57 @@ fun MultiLinePingChart(servers: List<GameServer>) {
             strokeWidth = 1.dp.toPx()
         )
 
-        servers.forEachIndexed { index, server ->
-            val points = server.pingHistory
-            if (points.size < 2) return@forEachIndexed
-            
-            val color = GameServerColors[index % GameServerColors.size]
-            val path = androidx.compose.ui.graphics.Path()
-            
-            points.forEachIndexed { pIndex, ping ->
-                val x = leftOffset + pIndex * (chartWidth / (points.size - 1))
-                val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
+        clipRect(right = leftOffset + chartWidth * animationProgress) {
+            servers.forEachIndexed { index, server ->
+                val points = server.pingHistory
+                if (points.size < 2) return@forEachIndexed
                 
-                if (pIndex == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            
-            // Draw path
-            drawPath(
-                path = path,
-                color = color,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 3.dp.toPx(), 
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                    join = androidx.compose.ui.graphics.StrokeJoin.Round
-                )
-            )
-            
-            // Draw nodes
-            points.forEachIndexed { pIndex, ping ->
-                val x = leftOffset + pIndex * (chartWidth / (points.size - 1))
-                val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
+                val color = GameServerColors[index % GameServerColors.size]
+                val path = androidx.compose.ui.graphics.Path()
                 
-                drawCircle(
+                val coords = points.mapIndexed { pIndex, ping ->
+                    val x = leftOffset + pIndex * (chartWidth / (points.size - 1))
+                    val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
+                    Offset(x, y)
+                }
+
+                path.moveTo(coords[0].x, coords[0].y)
+                for (i in 0 until coords.size - 1) {
+                    val p1 = coords[i]
+                    val p2 = coords[i + 1]
+                    val cp1x = (p1.x + p2.x) / 2f
+                    val cp1y = p1.y
+                    val cp2x = (p1.x + p2.x) / 2f
+                    val cp2y = p2.y
+                    path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+                }
+                
+                // Draw path
+                drawPath(
+                    path = path,
                     color = color,
-                    center = Offset(x, y),
-                    radius = 3.dp.toPx()
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 3.dp.toPx(), 
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        join = androidx.compose.ui.graphics.StrokeJoin.Round
+                    )
                 )
-                // Outer circle for better visibility
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.5f),
-                    center = Offset(x, y),
-                    radius = 4.dp.toPx(),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                )
+                
+                // Draw nodes
+                coords.forEach { coord ->
+                    drawCircle(
+                        color = color,
+                        center = coord,
+                        radius = 3.dp.toPx()
+                    )
+                    // Outer circle for better visibility
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.5f),
+                        center = coord,
+                        radius = 5.dp.toPx(),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                    )
+                }
             }
         }
     }

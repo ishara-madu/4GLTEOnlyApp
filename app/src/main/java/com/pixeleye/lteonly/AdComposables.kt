@@ -19,13 +19,8 @@ fun BannerAd(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     
-    // Remember the AdView across parent recompositions to prevent duplicate ad requests
     val adView = remember {
-        AdView(context).apply {
-            setAdSize(AdSize.BANNER)
-            adUnitId = AdManager.BANNER_AD_UNIT_ID
-            loadAd(AdRequest.Builder().build())
-        }
+        AdManager.getOrCreateBannerAdView(context)
     }
 
     // Properly bind AdView to Android Lifecycle to pause auto-refreshing in the background
@@ -34,7 +29,7 @@ fun BannerAd(modifier: Modifier = Modifier) {
             when (event) {
                 Lifecycle.Event.ON_RESUME -> adView.resume()
                 Lifecycle.Event.ON_PAUSE -> adView.pause()
-                Lifecycle.Event.ON_DESTROY -> adView.destroy()
+                Lifecycle.Event.ON_DESTROY -> adView.pause()
                 else -> {}
             }
         }
