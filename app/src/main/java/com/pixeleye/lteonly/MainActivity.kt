@@ -22,6 +22,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +48,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.res.painterResource
@@ -177,6 +181,22 @@ fun DashboardScreen(themeManager: ThemeManager) {
     var speedTestPhase by remember { mutableStateOf("IDLE") }
     var pingTestResult by remember { mutableStateOf<PingTestResult?>(null) }
     var hasSavedInitialSignal by remember { mutableStateOf(false) }
+    
+    var isPingStabilizerEnabled by remember { mutableStateOf(PingStabilizerService.isRunning) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                isPingStabilizerEnabled = true
+                val intent = Intent(context, PingStabilizerService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            }
+        }
+    )
 
     var storedSignalHistory by remember { mutableStateOf<List<SignalHistoryEntity>>(emptyList()) }
     var storedDataUsage by remember { mutableStateOf<List<DataUsageEntity>>(emptyList()) }
@@ -342,6 +362,33 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 gameServers = gameServers,
                 isUserPro = isUserPro,
                 onUpgradeClick = { showPaywall = true },
+                isPingStabilizerEnabled = isPingStabilizerEnabled,
+                onTogglePingStabilizer = { enabled, targetIp ->
+                    if (enabled) {
+                        if (!isUserPro) {
+                            showPaywall = true
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && 
+                            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            isPingStabilizerEnabled = true
+                            val intent = Intent(context, PingStabilizerService::class.java).apply {
+                                putExtra("TARGET_IP", targetIp)
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                context.startForegroundService(intent)
+                            } else {
+                                context.startService(intent)
+                            }
+                        }
+                    } else {
+                        isPingStabilizerEnabled = false
+                        val intent = Intent(context, PingStabilizerService::class.java).apply {
+                            action = "STOP_SERVICE"
+                        }
+                        context.startService(intent)
+                    }
+                },
                 onSpeedTestClick = {
                     if (!isSpeedTestRunning) {
                         isSpeedTestRunning = true
@@ -1320,7 +1367,13 @@ fun AnalyticsTab(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            GlobalServerLatencyCard(gameServers)
+            GlobalServerLatencyCard(
+                gameServers = gameServers
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            PingStabilizerHistoryChart()
             
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -1532,6 +1585,8 @@ fun ToolsTab(
     gameServers: List<GameServer>,
     isUserPro: Boolean = false,
     onUpgradeClick: () -> Unit = {},
+    isPingStabilizerEnabled: Boolean = false,
+    onTogglePingStabilizer: (Boolean, String) -> Unit = { _, _ -> },
     onSpeedTestClick: () -> Unit,
     onPingTestClick: () -> Unit,
     context: Context
@@ -1569,6 +1624,17 @@ fun ToolsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         NetworkInfoCard(localIp = localIp, publicIp = publicIp, wifiSpeed = wifiSpeed)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        val settingsManager = remember { SettingsManager.getInstance(context) }
+        PingStabilizerCard(
+            isPingStabilizerEnabled = isPingStabilizerEnabled,
+            onTogglePingStabilizer = onTogglePingStabilizer,
+            isUserPro = isUserPro,
+            onUpgradeClick = onUpgradeClick,
+            settingsManager = settingsManager
+        )
         
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -1792,22 +1858,28 @@ private fun PingHistoryChart(history: List<Int>, modifier: Modifier = Modifier) 
 
     BoxWithConstraints(modifier = modifier) {
         val scrollState = rememberScrollState()
+        LaunchedEffect(scrollState.maxValue) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+        
         val minWidth = maxWidth
         val itemWidth = 30.dp
         val requiredWidth = maxOf(minWidth, itemWidth * history.size)
+        
+        val reversedHistory = history.reversed()
 
         Box(modifier = Modifier.horizontalScroll(scrollState)) {
             Canvas(modifier = Modifier.width(requiredWidth).fillMaxHeight()) {
                 val width = size.width
                 val height = size.height
-                val xPadding = if (history.size > 1) 20f else width / 2f
-                val chartWidth = if (history.size > 1) width - (xPadding * 2) else width
+                val xPadding = if (reversedHistory.size > 1) 20f else width / 2f
+                val chartWidth = if (reversedHistory.size > 1) width - (xPadding * 2) else width
                 
-                val maxPing = (history.maxOrNull() ?: 100).coerceAtLeast(100).toFloat()
+                val maxPing = (reversedHistory.maxOrNull() ?: 100).coerceAtLeast(100).toFloat()
                 val yRange = maxPing * 1.2f // Add 20% headroom
 
-                val coords = history.mapIndexed { index, ping ->
-                    val x = if (history.size == 1) xPadding else xPadding + (index.toFloat() / (history.size - 1)) * chartWidth
+                val coords = reversedHistory.mapIndexed { index, ping ->
+                    val x = if (reversedHistory.size == 1) xPadding else xPadding + (index.toFloat() / (reversedHistory.size - 1)) * chartWidth
                     val y = height - ((ping.toFloat() / yRange) * height)
                     Offset(x, y)
                 }
@@ -1906,17 +1978,22 @@ private fun SpeedHistoryChart(history: List<SpeedTestEntity>, modifier: Modifier
 
     BoxWithConstraints(modifier = modifier) {
         val scrollState = rememberScrollState()
+        LaunchedEffect(scrollState.maxValue) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
         val minWidth = maxWidth
         val itemWidth = 40.dp
         val requiredWidth = maxOf(minWidth, itemWidth * history.size)
+        
+        val reversedHistory = history.reversed()
 
         Box(modifier = Modifier.horizontalScroll(scrollState)) {
             Canvas(modifier = Modifier.width(requiredWidth).fillMaxHeight()) {
                 val width = size.width
                 val height = size.height
-                val barWidth = width / history.size
+                val barWidth = width / reversedHistory.size
 
-                history.forEachIndexed { index, test ->
+                reversedHistory.forEachIndexed { index, test ->
                     val targetDownHeight = height * ((test.downloadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
                     val targetUpHeight = height * ((test.uploadSpeed.toFloat() / maxSpeed).coerceIn(0.05f, 1f))
                     
@@ -2817,9 +2894,14 @@ private fun SignalHistoryChart(history: List<Int>, modifier: Modifier = Modifier
 
     BoxWithConstraints(modifier = modifier) {
         val scrollState = rememberScrollState()
+        LaunchedEffect(scrollState.maxValue) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
         val minWidth = maxWidth
         val itemWidth = 30.dp
         val requiredWidth = maxOf(minWidth, itemWidth * history.size)
+        
+        val reversedHistory = history.reversed()
 
         Box(modifier = Modifier.horizontalScroll(scrollState)) {
             Canvas(modifier = Modifier.width(requiredWidth).fillMaxHeight()) {
@@ -2829,8 +2911,8 @@ private fun SignalHistoryChart(history: List<Int>, modifier: Modifier = Modifier
                 val maxRsrp = -60f
                 val range = maxRsrp - minRsrp
 
-                val points = history.mapIndexed { index, rsrp ->
-                    val x = (index.toFloat() / (history.size - 1).coerceAtLeast(1)) * width
+                val points = reversedHistory.mapIndexed { index, rsrp ->
+                    val x = (index.toFloat() / (reversedHistory.size - 1).coerceAtLeast(1)) * width
                     val normalizedY = ((rsrp - minRsrp) / range).coerceIn(0f, 1f)
                     val y = height - (normalizedY * height)
                     Offset(x, y)
@@ -2901,7 +2983,11 @@ private fun SignalHistoryChart(history: List<Int>, modifier: Modifier = Modifier
                     }
                 }
             }
-       @Composable
+        }
+    }
+}
+
+@Composable
 private fun SpeedTestBarChart(
     speedTests: List<SpeedTestEntity>,
     onTestClick: (SpeedTestEntity) -> Unit
@@ -2919,74 +3005,79 @@ private fun SpeedTestBarChart(
         label = "SpeedTestBarChartAnimation"
     )
 
-    BoxWithConstraints {
-        val scrollState = rememberScrollState()
-        val minWidth = maxWidth
-        val itemWidth = 40.dp
-        val requiredWidth = maxOf(minWidth, itemWidth * speedTests.size)
+    Column {
+        BoxWithConstraints {
+            val scrollState = rememberScrollState()
+            LaunchedEffect(scrollState.maxValue) {
+                scrollState.scrollTo(scrollState.maxValue)
+            }
+            val minWidth = maxWidth
+            val itemWidth = 40.dp
+            val requiredWidth = maxOf(minWidth, itemWidth * speedTests.size)
+            
+            val reversedTests = speedTests.reversed()
 
-        Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState)) {
-            Column(modifier = Modifier.width(requiredWidth)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    speedTests.forEachIndexed { index, test ->
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxHeight(),
-                                verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState)) {
+                Column(modifier = Modifier.width(requiredWidth)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(80.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        reversedTests.forEachIndexed { index, test ->
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                val targetDownloadHeight = if (maxSpeed > 0) (test.downloadSpeed / maxSpeed).toFloat() else 0f
-                                val targetUploadHeight = if (maxSpeed > 0) (test.uploadSpeed / maxSpeed).toFloat() else 0f
+                                Row(
+                                    modifier = Modifier.fillMaxHeight(),
+                                    verticalAlignment = Alignment.Bottom,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    val targetDownloadHeight = if (maxSpeed > 0) (test.downloadSpeed / maxSpeed).toFloat() else 0f
+                                    val targetUploadHeight = if (maxSpeed > 0) (test.uploadSpeed / maxSpeed).toFloat() else 0f
 
-                                val downloadHeight = (targetDownloadHeight.coerceIn(0.05f, 1f) * animationProgress)
-                                val uploadHeight = (targetUploadHeight.coerceIn(0.05f, 1f) * animationProgress)
+                                    val downloadHeight = (targetDownloadHeight.coerceIn(0.05f, 1f) * animationProgress)
+                                    val uploadHeight = (targetUploadHeight.coerceIn(0.05f, 1f) * animationProgress)
 
-                                Box(
-                                    modifier = Modifier
-                                        .width(8.dp)
-                                        .fillMaxHeight(downloadHeight)
-                                        .clip(RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp))
-                                        .background(Brush.verticalGradient(listOf(GradientStart, GradientStart.copy(alpha = 0.5f))))
-                                        .clickable { onTestClick(test) }
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .width(8.dp)
-                                        .fillMaxHeight(uploadHeight)
-                                        .clip(RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp))
-                                        .background(Brush.verticalGradient(listOf(GradientEnd, GradientEnd.copy(alpha = 0.5f))))
-                                        .clickable { onTestClick(test) }
-                                )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(8.dp)
+                                            .fillMaxHeight(downloadHeight)
+                                            .clip(RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp))
+                                            .background(Brush.verticalGradient(listOf(GradientStart, GradientStart.copy(alpha = 0.5f))))
+                                            .clickable { onTestClick(test) }
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(8.dp)
+                                            .fillMaxHeight(uploadHeight)
+                                            .clip(RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp))
+                                            .background(Brush.verticalGradient(listOf(GradientEnd, GradientEnd.copy(alpha = 0.5f))))
+                                            .clickable { onTestClick(test) }
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    speedTests.forEachIndexed { index, _ ->
-                        Text(
-                            text = "${index + 1}",
-                            style = Typography.labelMedium.copy(fontSize = 8.sp),
-                            color = TextSecondary,
-                            modifier = Modifier.weight(1f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        reversedTests.forEachIndexed { index, _ ->
+                            Text(
+                                text = "${index + 1}",
+                                style = Typography.labelMedium.copy(fontSize = 8.sp),
+                                color = TextSecondary,
+                                modifier = Modifier.weight(1f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-}      }
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -3756,7 +3847,9 @@ fun GameServerItem(server: GameServer) {
 }
 
 @Composable
-fun GlobalServerLatencyCard(gameServers: List<GameServer>) {
+fun GlobalServerLatencyCard(
+    gameServers: List<GameServer>
+) {
     AnalyticsCard(
         title = "GLOBAL SERVER LATENCY",
         subtitle = "Multi-region historical trends"
@@ -3802,95 +3895,102 @@ fun MultiLinePingChart(servers: List<GameServer>) {
         label = "MultiPingAnimation"
     )
 
-    Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
-        val width = size.width
-        val height = size.height
-        val leftOffset = paddingLeft.toPx()
-        val bottomOffset = paddingBottom.toPx()
-        val chartWidth = width - leftOffset
-        val chartHeight = height - bottomOffset
-        
-        // Draw Y-axis labels and horizontal grid lines
-        val stepCount = (maxPing / 100).toInt()
-        for (i in 0..stepCount) {
-            val pingVal = i * 100
-            val y = chartHeight - (pingVal.toFloat() / maxPing * chartHeight)
-            
-            // Grid line
-            drawLine(
-                color = TextSecondary.copy(alpha = 0.1f),
-                start = Offset(leftOffset, y),
-                end = Offset(width, y),
-                strokeWidth = 1.dp.toPx()
-            )
-            
-            // Y-axis label
-            drawContext.canvas.nativeCanvas.drawText(
-                "${pingVal}ms",
-                leftOffset - 8.dp.toPx(),
-                y + 4.dp.toPx(),
-                textPaint
-            )
-        }
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+        val maxPoints = servers.maxOfOrNull { it.pingHistory.size } ?: 0
+        val minChartWidth = maxWidth - paddingLeft
+        val requiredChartWidth = maxOf(minChartWidth, 30.dp * maxPoints)
 
-        // Horizontal baseline
-        drawLine(
-            color = TextSecondary.copy(alpha = 0.3f),
-            start = Offset(leftOffset, chartHeight),
-            end = Offset(width, chartHeight),
-            strokeWidth = 1.dp.toPx()
-        )
-
-        clipRect(right = leftOffset + chartWidth * animationProgress) {
-            servers.forEachIndexed { index, server ->
-                val points = server.pingHistory
-                if (points.size < 2) return@forEachIndexed
+        Row(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.width(paddingLeft).fillMaxHeight()) {
+                val height = size.height
+                val bottomOffset = paddingBottom.toPx()
+                val chartHeight = height - bottomOffset
                 
-                val color = GameServerColors[index % GameServerColors.size]
-                val path = androidx.compose.ui.graphics.Path()
-                
-                val coords = points.mapIndexed { pIndex, ping ->
-                    val x = leftOffset + pIndex * (chartWidth / (points.size - 1))
-                    val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
-                    Offset(x, y)
+                val stepCount = (maxPing / 100).toInt()
+                for (i in 0..stepCount) {
+                    val pingVal = i * 100
+                    val y = chartHeight - (pingVal.toFloat() / maxPing * chartHeight)
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "${pingVal}ms",
+                        size.width - 8.dp.toPx(),
+                        y + 4.dp.toPx(),
+                        textPaint
+                    )
                 }
+            }
 
-                path.moveTo(coords[0].x, coords[0].y)
-                for (i in 0 until coords.size - 1) {
-                    val p1 = coords[i]
-                    val p2 = coords[i + 1]
-                    val cp1x = (p1.x + p2.x) / 2f
-                    val cp1y = p1.y
-                    val cp2x = (p1.x + p2.x) / 2f
-                    val cp2y = p2.y
-                    path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
-                }
-                
-                // Draw path
-                drawPath(
-                    path = path,
-                    color = color,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 3.dp.toPx(), 
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                        join = androidx.compose.ui.graphics.StrokeJoin.Round
+            val scrollState = rememberScrollState()
+            LaunchedEffect(scrollState.maxValue) {
+                scrollState.scrollTo(scrollState.maxValue)
+            }
+            Box(modifier = Modifier.weight(1f).horizontalScroll(scrollState)) {
+                Canvas(modifier = Modifier.width(requiredChartWidth).fillMaxHeight()) {
+                    val width = size.width
+                    val height = size.height
+                    val bottomOffset = paddingBottom.toPx()
+                    val chartHeight = height - bottomOffset
+                    
+                    val stepCount = (maxPing / 100).toInt()
+                    for (i in 0..stepCount) {
+                        val pingVal = i * 100
+                        val y = chartHeight - (pingVal.toFloat() / maxPing * chartHeight)
+                        drawLine(
+                            color = TextSecondary.copy(alpha = 0.1f),
+                            start = Offset(0f, y),
+                            end = Offset(width, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+
+                    // Horizontal baseline
+                    drawLine(
+                        color = TextSecondary.copy(alpha = 0.3f),
+                        start = Offset(0f, chartHeight),
+                        end = Offset(width, chartHeight),
+                        strokeWidth = 1.dp.toPx()
                     )
-                )
-                
-                // Draw nodes
-                coords.forEach { coord ->
-                    drawCircle(
-                        color = color,
-                        center = coord,
-                        radius = 3.dp.toPx()
-                    )
-                    // Outer circle for better visibility
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.5f),
-                        center = coord,
-                        radius = 5.dp.toPx(),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                    )
+
+                    clipRect(right = width * animationProgress) {
+                        servers.forEachIndexed { index, server ->
+                            val points = server.pingHistory
+                            if (points.size < 2) return@forEachIndexed
+                            
+                            val color = GameServerColors[index % GameServerColors.size]
+                            val path = androidx.compose.ui.graphics.Path()
+                            
+                            val coords = points.mapIndexed { pIndex, ping ->
+                                val x = if (maxPoints > 1) pIndex * (width / (maxPoints - 1)) else width / 2f
+                                val y = chartHeight - (ping.toFloat() / maxPing * chartHeight).coerceIn(0f, chartHeight)
+                                Offset(x, y)
+                            }
+
+                            path.moveTo(coords[0].x, coords[0].y)
+                            for (i in 0 until coords.size - 1) {
+                                val p1 = coords[i]
+                                val p2 = coords[i + 1]
+                                val cp1x = (p1.x + p2.x) / 2f
+                                val cp1y = p1.y
+                                val cp2x = (p1.x + p2.x) / 2f
+                                val cp2y = p2.y
+                                path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+                            }
+                            
+                            drawPath(
+                                path = path,
+                                color = color,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = 3.dp.toPx(), 
+                                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                    join = androidx.compose.ui.graphics.StrokeJoin.Round
+                                )
+                            )
+                            
+                            coords.forEach { coord ->
+                                drawCircle(color = color, center = coord, radius = 3.dp.toPx())
+                                drawCircle(color = Color.White.copy(alpha = 0.5f), center = coord, radius = 5.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3910,6 +4010,199 @@ fun ChartLegend(servers: List<GameServer>) {
                 Box(modifier = Modifier.size(8.dp).background(GameServerColors[index % GameServerColors.size], CircleShape))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(server.name, style = Typography.labelSmall, color = TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+fun PingStabilizerCard(
+    isPingStabilizerEnabled: Boolean,
+    onTogglePingStabilizer: (Boolean, String) -> Unit,
+    isUserPro: Boolean,
+    onUpgradeClick: () -> Unit,
+    settingsManager: SettingsManager
+) {
+    val pingHistory by PingStabilizerService.pingHistory.collectAsState()
+    val savedTargetIp by settingsManager.customTargetIpFlow.collectAsState()
+    var targetIp by remember(savedTargetIp) { mutableStateOf(savedTargetIp) }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
+            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
+            .padding(20.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Ping Stabilizer", 
+                            style = Typography.titleMedium, 
+                            color = TextPrimary
+                        )
+                        if (!isUserPro) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFFFD700).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("PRO", style = Typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = Color(0xFFFFD700))
+                            }
+                        }
+                    }
+                    Text(
+                        text = "Prevents connection sleeping to reduce lag spikes", 
+                        style = Typography.labelSmall, 
+                        color = TextSecondary
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = isPingStabilizerEnabled,
+                    onCheckedChange = { 
+                        if (!isUserPro) {
+                            onUpgradeClick()
+                        } else {
+                            onTogglePingStabilizer(it, targetIp) 
+                        }
+                    },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF6C63FF),
+                        uncheckedThumbColor = TextSecondary,
+                        uncheckedTrackColor = NeumorphicBackground
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            androidx.compose.material3.OutlinedTextField(
+                value = targetIp,
+                onValueChange = { 
+                    targetIp = it 
+                    settingsManager.setCustomTargetIp(it)
+                },
+                label = { Text("Custom Target IP (Optional)", color = TextSecondary) },
+                placeholder = { Text("Default: 1.1.1.1", color = TextSecondary.copy(alpha = 0.5f)) },
+                textStyle = androidx.compose.ui.text.TextStyle(color = TextPrimary),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF6C63FF),
+                    unfocusedBorderColor = TextSecondary.copy(alpha = 0.5f),
+                    focusedLabelColor = Color(0xFF6C63FF),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !isPingStabilizerEnabled
+            )
+
+            if (isPingStabilizerEnabled) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "Live Log",
+                    style = Typography.labelMedium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(Color(0xFF1E1E2E), RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                ) {
+                    val listState = rememberLazyListState()
+                    
+                    LaunchedEffect(pingHistory.size) {
+                        if (pingHistory.isNotEmpty()) {
+                            listState.animateScrollToItem(pingHistory.size - 1)
+                        }
+                    }
+                    
+                    LazyColumn(state = listState) {
+                        items(pingHistory) { ping ->
+                            val color = when {
+                                ping < 80 -> Color(0xFF4CAF50)
+                                ping < 150 -> Color(0xFFFF9800)
+                                else -> Color(0xFFF44336)
+                            }
+                            Text(
+                                text = "Ping: ${ping}ms",
+                                style = Typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                color = color,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PingStabilizerHistoryChart() {
+    val pingHistory by PingStabilizerService.pingHistory.collectAsState()
+    
+    if (pingHistory.isEmpty()) return
+
+    AnalyticsCard(
+        title = "PING STABILIZER HISTORY",
+        subtitle = "Live view of background stabilization pings"
+    ) {
+        val scrollState = rememberScrollState()
+
+        LaunchedEffect(pingHistory.size) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+
+        val itemWidth = 8.dp
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+            val minWidth = itemWidth * pingHistory.size
+            val parentMaxWidth = maxWidth
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(scrollState),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Box(modifier = Modifier.width(maxOf(minWidth, parentMaxWidth)).fillMaxHeight()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val width = size.width
+                        val height = size.height
+                        val itemW = itemWidth.toPx()
+                        val maxPing = (pingHistory.maxOrNull() ?: 100).coerceAtLeast(100).toFloat()
+                        
+                        val startX = width - (pingHistory.size * itemW)
+                        
+                        pingHistory.forEachIndexed { index, ping ->
+                            val normalizedHeight = (ping.toFloat() / maxPing) * height * 0.8f
+                            val x = startX + (index * itemW)
+                            val color = when {
+                                ping < 80 -> Color(0xFF4CAF50)
+                                ping < 150 -> Color(0xFFFF9800)
+                                else -> Color(0xFFF44336)
+                            }
+                            
+                            drawLine(
+                                color = color,
+                                start = androidx.compose.ui.geometry.Offset(x, height),
+                                end = androidx.compose.ui.geometry.Offset(x, height - normalizedHeight),
+                                strokeWidth = itemW * 0.6f,
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                        }
+                    }
+                }
             }
         }
     }

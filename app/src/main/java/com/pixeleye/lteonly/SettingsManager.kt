@@ -18,9 +18,13 @@ class SettingsManager private constructor(private val context: Context) {
     private val _speedTestReminderFlow = MutableStateFlow(true)
     val speedTestReminderFlow: StateFlow<Boolean> = _speedTestReminderFlow.asStateFlow()
 
+    private val _customTargetIpFlow = MutableStateFlow("")
+    val customTargetIpFlow: StateFlow<String> = _customTargetIpFlow.asStateFlow()
+
     init {
         CoroutineScope(Dispatchers.IO).launch {
             _speedTestReminderFlow.value = prefs.getBoolean(KEY_SPEED_TEST, true)
+            _customTargetIpFlow.value = prefs.getString(KEY_CUSTOM_TARGET_IP, "") ?: ""
         }
     }
 
@@ -31,9 +35,17 @@ class SettingsManager private constructor(private val context: Context) {
         }
     }
 
+    fun setCustomTargetIp(ip: String) {
+        _customTargetIpFlow.value = ip
+        CoroutineScope(Dispatchers.IO).launch {
+            prefs.edit().putString(KEY_CUSTOM_TARGET_IP, ip).apply()
+        }
+    }
+
     companion object {
         private const val PREFS_NAME = "app_settings_prefs"
         private const val KEY_SPEED_TEST = "speed_test_reminder"
+        private const val KEY_CUSTOM_TARGET_IP = "custom_target_ip"
         
         @Volatile
         private var INSTANCE: SettingsManager? = null
