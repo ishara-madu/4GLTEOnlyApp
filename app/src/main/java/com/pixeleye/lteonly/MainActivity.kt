@@ -78,8 +78,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import java.util.concurrent.TimeUnit
-import androidx.compose.material.icons.filled.Gamepad
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+// Removed unused material icons imports
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.graphics.nativeCanvas
@@ -273,12 +272,12 @@ fun DashboardScreen(themeManager: ThemeManager) {
     LaunchedEffect(speedTestReminder) {
         val workManager = WorkManager.getInstance(context)
         if (speedTestReminder) {
-            val reminderRequest = PeriodicWorkRequestBuilder<SpeedTestReminderWorker>(1, TimeUnit.DAYS)
+            val reminderRequest = PeriodicWorkRequestBuilder<SpeedTestReminderWorker>(6, TimeUnit.HOURS)
                 .addTag("speed_test_reminder")
                 .build()
             workManager.enqueueUniquePeriodicWork(
                 "speed_test_reminder",
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 reminderRequest
             )
         } else {
@@ -463,10 +462,10 @@ fun NeumorphicBottomBar(
     modifier: Modifier = Modifier
 ) {
     val navItems = listOf(
-        NavItem(Icons.Default.Home, "Home"),
-        NavItem(Icons.AutoMirrored.Filled.List, "Analytics"),
-        NavItem(Icons.Default.Build, "Tools"),
-        NavItem(Icons.Default.Settings, "Settings")
+        NavItem(R.drawable.home, "Home"),
+        NavItem(R.drawable.analytics, "Analytics"),
+        NavItem(R.drawable.tools, "Tools"),
+        NavItem(R.drawable.settings, "Settings")
     )
 
     Box(
@@ -515,7 +514,7 @@ fun NeumorphicBottomBar(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = item.icon,
+                            painter = androidx.compose.ui.res.painterResource(id = item.icon),
                             contentDescription = item.label,
                             modifier = Modifier.size(24.dp),
                             tint = if (selected) Color.White else TextSecondary
@@ -534,7 +533,7 @@ fun NeumorphicBottomBar(
     }
 }
 
-data class NavItem(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String)
+data class NavItem(val icon: Int, val label: String)
 
 // ---------------------------------------------------------
 // REUSABLE COMPONENTS
@@ -631,7 +630,7 @@ fun HomeTab(
                         .background(NeumorphicBackground, RoundedCornerShape(12.dp))
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                        painter = androidx.compose.ui.res.painterResource(id = R.drawable.question),
                         contentDescription = "How to Use",
                         tint = GradientStart,
                         modifier = Modifier.size(20.dp)
@@ -749,7 +748,7 @@ fun HomeTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "\u2728 Upgrade to Pro",
+                                text = "Upgrade to Pro",
                                 style = Typography.titleMedium.copy(fontSize = 18.sp),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
@@ -762,10 +761,10 @@ fun HomeTab(
                             )
                         }
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.pro),
                             contentDescription = "Upgrade",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
@@ -803,7 +802,7 @@ fun HomeTab(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "🎁 Watch Ad to Try Pro",
+                                    text = "Watch Ad to Try Pro",
                                     style = Typography.titleMedium.copy(fontSize = 18.sp),
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
@@ -816,7 +815,7 @@ fun HomeTab(
                                 )
                             }
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                                painter = androidx.compose.ui.res.painterResource(id = R.drawable.gift),
                                 contentDescription = "Try Pro",
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
@@ -1489,7 +1488,7 @@ fun AnalyticsTab(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.subscription),
                             contentDescription = "Locked",
                             tint = Color.White,
                             modifier = Modifier.size(36.dp)
@@ -1524,11 +1523,20 @@ fun AnalyticsTab(
                             .clickable { onUpgradeClick() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "\uD83D\uDD13 Unlock Now",
-                            style = Typography.labelMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(id = R.drawable.unlock),
+                                contentDescription = "Unlock",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Unlock Now",
+                                style = Typography.labelMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -1679,31 +1687,34 @@ fun ToolsTab(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     SpeedColumn(
-                        icon = Icons.Default.KeyboardArrowDown,
+                        icon = R.drawable.download,
                         label = "DOWNLOAD",
                         value = if (speedTestPhase == "IDLE" && speedTestResult != null) String.format("%.1f", speedTestResult?.downloadSpeed ?: 0.0)
                                 else if (speedTestPhase == "DOWNLOAD") animatedDots
                                 else if (speedTestResult?.downloadSpeed != null && speedTestResult.downloadSpeed > 0) String.format("%.1f", speedTestResult.downloadSpeed)
-                                else "...",
-                        unit = "Mbps"
+                        else "...",
+                        unit = "Mbps",
+                        modifier = Modifier.weight(1f)
                     )
                     SpeedColumn(
-                        icon = Icons.Default.KeyboardArrowUp,
+                        icon = R.drawable.upload,
                         label = "UPLOAD",
                         value = if (speedTestPhase == "IDLE" && speedTestResult != null) String.format("%.1f", speedTestResult?.uploadSpeed ?: 0.0)
                                 else if (speedTestPhase == "UPLOAD") animatedDots
                                 else if (speedTestResult?.uploadSpeed != null && speedTestResult.uploadSpeed > 0) String.format("%.1f", speedTestResult.uploadSpeed)
-                                else "...",
-                        unit = "Mbps"
+                        else "...",
+                        unit = "Mbps",
+                        modifier = Modifier.weight(1f)
                     )
                     SpeedColumn(
-                        icon = androidx.compose.material.icons.Icons.Default.Timer,
+                        icon = R.drawable.ping,
                         label = "PING",
                         value = if (speedTestPhase == "IDLE" && speedTestResult != null) "${speedTestResult?.ping ?: 0}"
                                 else if (speedTestPhase == "PING") animatedDots
                                 else if (speedTestResult?.ping != null && speedTestResult.ping > 0) "${speedTestResult.ping}"
-                                else "...",
-                        unit = "ms"
+                        else "...",
+                        unit = "ms",
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -1816,14 +1827,14 @@ fun ToolsTab(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Build, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(32.dp))
+                        Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.apn), contentDescription = null, tint = TextPrimary, modifier = Modifier.size(32.dp))
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text("APN SETTINGS", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
                             Text("Network Configuration", style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary)
+                    Icon(androidx.compose.ui.res.painterResource(id = R.drawable.arrow_forward), contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -1833,9 +1844,9 @@ fun ToolsTab(
 }
 
 @Composable
-private fun SpeedColumn(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, unit: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = TextSecondary)
+private fun SpeedColumn(icon: Int, label: String, value: String, unit: String, modifier: Modifier = Modifier) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        Icon(painter = androidx.compose.ui.res.painterResource(id = icon), contentDescription = null, modifier = Modifier.size(24.dp), tint = TextSecondary)
         Spacer(modifier = Modifier.height(4.dp))
         Text(value, style = Typography.titleLarge.copy(fontSize = 22.sp), color = TextPrimary, fontWeight = FontWeight.Bold)
         Text(unit, style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary)
@@ -2070,7 +2081,7 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
         Spacer(modifier = Modifier.height(24.dp))
 
         // App Theme
-        SettingsCard(title = "App Theme", icon = Icons.Default.Settings) {
+        SettingsCard(title = "App Theme", icon = R.drawable.theme) {
             Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NeumorphicDarkShadow.copy(alpha=0.3f)).padding(4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ThemeOptionButton(
                     text = "Light",
@@ -2102,7 +2113,7 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
         Spacer(modifier = Modifier.height(16.dp))
 
         // Notifications
-        SettingsCard(title = "Notifications", icon = Icons.Default.Notifications) {
+        SettingsCard(title = "Notifications", icon = R.drawable.notification) {
             ToggleRow("Speed Test Reminder", speedTestReminder, onToggleChange = { settingsManager.setSpeedTestReminder(it) })
         }
 
@@ -2111,7 +2122,7 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
         // Help & Support
         SettingsCard(
             title = "Help & Support",
-            icon = Icons.Default.Star,
+            icon = R.drawable.support,
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
                 try {
@@ -2127,7 +2138,7 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
         // Manage Subscription (RevenueCat Customer Center)
         SettingsCard(
             title = "Manage Subscription",
-            icon = Icons.Default.CreditCard,
+            icon = R.drawable.subscription,
             onClick = {
                 Purchases.sharedInstance.getCustomerInfoWith(
                     onError = {
@@ -2150,7 +2161,7 @@ fun SettingsTab(themeManager: ThemeManager, context: Context) {
 
         SettingsCard(
             title = "About",
-            icon = Icons.Default.Info,
+            icon = R.drawable.about,
             onClick = { showAboutSheet = true }
         )
 
@@ -2175,7 +2186,7 @@ fun SettingsActionRow(title: String, trailingIcon: androidx.compose.ui.graphics.
         if (trailingIcon != null) {
             Icon(trailingIcon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
         } else {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            Icon(androidx.compose.ui.res.painterResource(id = R.drawable.arrow_forward), contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -2203,7 +2214,7 @@ private fun RowScope.ThemeOptionButton(text: String, isSelected: Boolean, onClic
 @Composable
 fun SettingsCard(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: Int,
     onClick: (() -> Unit)? = null,
     content: @Composable (() -> Unit)? = null
 ) {
@@ -2223,12 +2234,12 @@ fun SettingsCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, contentDescription = null, tint = GradientStart, modifier = Modifier.size(24.dp))
+                    Icon(painter = androidx.compose.ui.res.painterResource(id = icon), contentDescription = null, tint = GradientStart, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Text(title, style = Typography.titleMedium.copy(fontSize = 16.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
                 if (onClick != null) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(androidx.compose.ui.res.painterResource(id = R.drawable.arrow_forward), contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                 }
             }
             if (content != null) {
@@ -2337,14 +2348,21 @@ fun CarrierInfoCard(
                     .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    if (networkInfo.isLocationEnabled) {
-                        if (networkInfo.isRoaming) Icons.Default.Public else Icons.Default.Home
-                    } else Icons.Default.LocationOff,
-                    contentDescription = null,
-                    tint = if (networkInfo.isLocationEnabled) TextTeal else Color.Red.copy(alpha = 0.7f),
-                    modifier = Modifier.size(14.dp)
-                )
+                if (networkInfo.isLocationEnabled) {
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = if (networkInfo.isRoaming) R.drawable.public_ip else R.drawable.home),
+                        contentDescription = null,
+                        tint = TextTeal,
+                        modifier = Modifier.size(14.dp)
+                    )
+                } else {
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = R.drawable.location_off),
+                        contentDescription = null,
+                        tint = Color.Red.copy(alpha = 0.7f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     if (networkInfo.isLocationEnabled) {
@@ -2693,14 +2711,14 @@ fun DataSpeedCard(speedInfo: SpeedInfo, context: Context) {
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SpeedColumn(
-                    icon = Icons.Default.KeyboardArrowDown,
+                    icon = R.drawable.download,
                     label = "DOWNLOAD",
                     value = formatSpeed(speedInfo.downloadSpeed),
                     color = speedColor,
                     modifier = Modifier.weight(1f)
                 )
                 SpeedColumn(
-                    icon = Icons.Default.KeyboardArrowUp,
+                    icon = R.drawable.upload,
                     label = "UPLOAD",
                     value = formatSpeed(speedInfo.uploadSpeed),
                     color = speedColor,
@@ -2739,7 +2757,7 @@ fun DataSpeedCard(speedInfo: SpeedInfo, context: Context) {
 }
 
 @Composable
-private fun SpeedColumn(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+private fun SpeedColumn(icon: Int, label: String, value: String, color: Color, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.08f), Color.Transparent)), RoundedCornerShape(16.dp))
@@ -2747,7 +2765,7 @@ private fun SpeedColumn(icon: androidx.compose.ui.graphics.vector.ImageVector, l
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = icon,
+                painter = androidx.compose.ui.res.painterResource(id = icon),
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = color
@@ -3148,7 +3166,7 @@ private fun SpeedTestDetailSheet(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            Icons.Default.KeyboardArrowDown,
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.download),
                             contentDescription = null,
                             tint = GradientStart,
                             modifier = Modifier.size(32.dp)
@@ -3164,7 +3182,7 @@ private fun SpeedTestDetailSheet(
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            Icons.Default.KeyboardArrowUp,
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.upload),
                             contentDescription = null,
                             tint = GradientEnd,
                             modifier = Modifier.size(32.dp)
@@ -3183,32 +3201,19 @@ private fun SpeedTestDetailSheet(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.background(TextTeal.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(Icons.Default.Home, contentDescription = null, tint = TextTeal, modifier = Modifier.size(16.dp))
+                        Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ping), contentDescription = null, tint = TextTeal, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             "${test.ping} ms",
                             style = Typography.bodyMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                             color = TextTeal
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.background(TextPrimary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(Icons.Default.Build, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            test.networkType,
-                            style = Typography.bodyMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                            color = TextPrimary
                         )
                     }
                 }
@@ -3263,7 +3268,7 @@ fun ApnEditorCardLite() {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = GradientStart, modifier = Modifier.size(32.dp))
+            Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.settings), contentDescription = "Settings", tint = GradientStart, modifier = Modifier.size(32.dp))
             Spacer(modifier = Modifier.height(8.dp))
             Text("APN Editor", style = Typography.labelMedium, color = TextPrimary)
         }
@@ -3635,7 +3640,7 @@ fun SecretCodeItem(brand: String, code: String, context: Context) {
             Text(code, style = Typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
         }
         Icon(
-            imageVector = Icons.Default.Dialpad,
+            painter = androidx.compose.ui.res.painterResource(id = R.drawable.dialpad),
             contentDescription = "Manual Type",
             tint = GradientStart,
             modifier = Modifier.size(20.dp)
@@ -3655,24 +3660,24 @@ fun NetworkInfoCard(localIp: String, publicIp: String, wifiSpeed: String) {
             Text("NETWORK INFORMATION", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
             Spacer(modifier = Modifier.height(16.dp))
             
-            NetworkInfoRow(icon = Icons.Default.Public, label = "Public IP", value = publicIp)
+            NetworkInfoRow(icon = R.drawable.public_ip, label = "Public IP", value = publicIp)
             Divider(modifier = Modifier.padding(vertical = 12.dp), color = TextSecondary.copy(alpha = 0.1f))
-            NetworkInfoRow(icon = Icons.Default.Lan, label = "Local IP", value = localIp)
+            NetworkInfoRow(icon = R.drawable.network, label = "Local IP", value = localIp)
             Divider(modifier = Modifier.padding(vertical = 12.dp), color = TextSecondary.copy(alpha = 0.1f))
-            NetworkInfoRow(icon = Icons.Default.Wifi, label = "Wi-Fi Speed", value = wifiSpeed)
+            NetworkInfoRow(icon = R.drawable.wifi, label = "Wi-Fi Speed", value = wifiSpeed)
         }
     }
 }
 
 @Composable
-private fun NetworkInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+private fun NetworkInfoRow(icon: Int, label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(imageVector = icon, contentDescription = null, tint = GradientStart, modifier = Modifier.size(20.dp))
+            Icon(painter = androidx.compose.ui.res.painterResource(id = icon), contentDescription = null, tint = GradientStart, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Text(text = label, style = Typography.bodyMedium, color = TextPrimary)
         }
@@ -3721,7 +3726,7 @@ fun GameServersPingCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Gamepad, contentDescription = null, tint = GradientStart, modifier = Modifier.size(32.dp))
+                Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.gaming), contentDescription = null, tint = GradientStart, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -3749,11 +3754,7 @@ fun GameServersPingCard(
                     Text("Regional Server Test", style = Typography.titleMedium.copy(fontSize = 18.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
             }
-            if (!isUserPro) {
-                Icon(Icons.Default.Lock, contentDescription = "Pro feature", tint = Color(0xFF6C63FF), modifier = Modifier.size(20.dp))
-            } else {
-                Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-            }
+            Icon(androidx.compose.ui.res.painterResource(id = R.drawable.arrow_forward), contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
         }
     }
 
@@ -4051,10 +4052,19 @@ fun PingStabilizerCard(
                             Spacer(modifier = Modifier.width(8.dp))
                             Box(
                                 modifier = Modifier
-                                    .background(Color(0xFFFFD700).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
+                                        ),
+                                        RoundedCornerShape(6.dp)
+                                    )
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Text("PRO", style = Typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = Color(0xFFFFD700))
+                                Text(
+                                    text = "PRO",
+                                    style = Typography.labelMedium.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
                             }
                         }
                     }

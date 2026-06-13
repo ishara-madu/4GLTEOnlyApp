@@ -65,33 +65,15 @@ fun SplashScreen(onSplashComplete: () -> Unit) {
             AdManager.loadAppOpenAd(context)
         }
 
-        val startTime = System.currentTimeMillis()
-        var adShown = false
-
-        // Wait up to 5 seconds (5000ms) to ensure the ad is loaded and shown.
-        // If ad loading fails, it breaks early.
-        while (System.currentTimeMillis() - startTime < 5000) {
-            if (AdManager.isAppOpenAdAvailable()) {
-                AdManager.showAppOpenAdOnSplash(activity ?: break) {
-                    onSplashComplete()
-                }
-                adShown = true
-                break
-            }
-            
-            // If ad fails to load and loading stops, exit early (after min 1000ms to allow starting)
-            val isReadyToCheckFailure = AdManager.isAdMobInitialized() && !AdManager.isAppOpenAdLoading()
-            if (isReadyToCheckFailure && !AdManager.isAppOpenAdAvailable()) {
-                if (System.currentTimeMillis() - startTime > 1000) {
-                    Log.d("SplashScreen", "App Open Ad failed to load or is unavailable, proceeding to dashboard.")
-                    break
-                }
-            }
-            
-            delay(100)
+        // Wait indefinitely until the ad is loaded
+        // AdManager automatically handles retries with exponential backoff if it fails,
+        // so we just wait here without spamming requests (AdMob policy compliance).
+        while (!AdManager.isAppOpenAdAvailable()) {
+            delay(500)
         }
 
-        if (!adShown) {
+        // Show the ad and wait for it to be dismissed before proceeding
+        AdManager.showAppOpenAdOnSplash(activity ?: return@LaunchedEffect) {
             onSplashComplete()
         }
     }

@@ -47,6 +47,7 @@ object AdManager {
     private var rewardedRetryAttempt = 0
     private var rewardedInterstitialRetryAttempt = 0
     private var appOpenRetryAttempt = 0
+    private var bannerRetryAttempt = 0
 
     fun preloadBannerAd(context: Context) {
         if (isProUser) return
@@ -55,6 +56,22 @@ object AdManager {
         cachedBannerAdView = AdView(context.applicationContext).apply {
             setAdSize(AdSize.BANNER)
             adUnitId = BANNER_AD_UNIT_ID
+            adListener = object : AdListener() {
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    Log.d(TAG, "Banner ad failed to load: ${adError.message}")
+                    val delayMs = (Math.pow(2.0, bannerRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
+                    bannerRetryAttempt++
+                    Log.d(TAG, "Scheduling banner ad retry in ${delayMs}ms (Attempt $bannerRetryAttempt)")
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(delayMs)
+                        loadAd(AdRequest.Builder().build())
+                    }
+                }
+                override fun onAdLoaded() {
+                    Log.d(TAG, "Banner ad loaded successfully")
+                    bannerRetryAttempt = 0
+                }
+            }
             loadAd(AdRequest.Builder().build())
         }
     }
@@ -161,8 +178,14 @@ object AdManager {
                             rewardedAd = null
                             isRewardedAdLoading = false
                             
-                            // Note: since standard rewarded is only loaded on demand (when clicked),
-                            // we do NOT trigger background retries here to avoid wasting bandwidth/requests.
+                            // Retry with exponential backoff (Policy Compliant)
+                            val delayMs = (Math.pow(2.0, rewardedRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
+                            rewardedRetryAttempt++
+                            Log.d(TAG, "Scheduling rewarded ad retry in ${delayMs}ms (Attempt $rewardedRetryAttempt)")
+                            CoroutineScope(Dispatchers.Main).launch {
+                                delay(delayMs)
+                                appContext?.let { loadRewarded(it) }
+                            }
                         }
 
                         override fun onAdLoaded(ad: RewardedAd) {

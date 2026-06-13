@@ -156,25 +156,13 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                 }
 
                 // Header Graphic
-                Box(
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = "App Logo",
                     modifier = Modifier
                         .size(80.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shield, 
-                        contentDescription = null, 
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), 
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Bolt, 
-                        contentDescription = null, 
-                        tint = MaterialTheme.colorScheme.primary, 
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
+                        .clip(RoundedCornerShape(16.dp))
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -204,17 +192,17 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     FeatureRow(
-                        icon = Icons.Default.Gamepad,
+                        iconRes = R.drawable.gaming,
                         title = "Game Servers Ping Analyzer",
                         description = "Real-time regional server tests."
                     )
                     FeatureRow(
-                        icon = Icons.Default.Analytics,
+                        iconRes = R.drawable.analytics,
                         title = "Pro Analytics",
                         description = "Remove blur effect and view clear historical data charts (data limited to recent results)."
                     )
                     FeatureRow(
-                        icon = Icons.Default.Block,
+                        iconRes = R.drawable.ad_free,
                         title = "Ad-Free Interface",
                         description = "Completely remove all banner and interstitial ads."
                     )
@@ -361,7 +349,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
 }
 
 @Composable
-fun FeatureRow(icon: ImageVector, title: String, description: String) {
+fun FeatureRow(iconRes: Int, title: String, description: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -373,7 +361,7 @@ fun FeatureRow(icon: ImageVector, title: String, description: String) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = icon, 
+                painter = androidx.compose.ui.res.painterResource(id = iconRes), 
                 contentDescription = null, 
                 tint = MaterialTheme.colorScheme.primary, 
                 modifier = Modifier.size(24.dp)
