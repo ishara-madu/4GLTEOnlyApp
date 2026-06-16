@@ -42,7 +42,7 @@ import com.pixeleye.lteonly.ui.theme.TextSecondary
 import com.pixeleye.lteonly.ui.theme.neumorphic
 
 @Composable
-fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
+fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = null) {
     val context = LocalContext.current
     val activity = context as? Activity
     
@@ -289,6 +289,43 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
                         Text(
                             text = "Upgrade Now",
                             color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                if (onWatchAdClick != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "OR",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = { 
+                            onDismiss()
+                            onWatchAdClick() 
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(28.dp),
+                        enabled = !isPurchasing
+                    ) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.tools), // Assuming a suitable icon exists
+                            contentDescription = "Watch Ad",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Watch Ad to Unlock for Session",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

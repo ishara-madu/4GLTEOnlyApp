@@ -60,22 +60,48 @@ fun SplashScreen(onSplashComplete: () -> Unit) {
             return@LaunchedEffect
         }
 
-        // Trigger ad load if it isn't already loading or cached
-        if (!AdManager.isAppOpenAdAvailable() && !AdManager.isAppOpenAdLoading()) {
-            AdManager.loadAppOpenAd(context)
+        // Wait for GDPR consent flow status update
+        var initWaitTime = 0
+        val maxInitWait = 5000 // 5 seconds max wait for consent completion
+        while (!AdManager.isConsentFlowComplete.value && !AdManager.isConsentFormShowing.value && initWaitTime < maxInitWait) {
+            delay(200)
+            initWaitTime += 200
         }
 
-        // Wait indefinitely until the ad is loaded
-        // AdManager automatically handles retries with exponential backoff if it fails,
-        // so we just wait here without spamming requests (AdMob policy compliance).
-        while (!AdManager.isAppOpenAdAvailable()) {
-            delay(500)
+        // If the consent form is actively showing, wait indefinitely until it's dismissed
+        if (AdManager.isConsentFormShowing.value) {
+            while (AdManager.isConsentFormShowing.value) {
+                delay(200)
+            }
         }
 
-        // Show the ad and wait for it to be dismissed before proceeding
-        AdManager.showAppOpenAdOnSplash(activity ?: return@LaunchedEffect) {
-            onSplashComplete()
+        // If initialized and consent allows ads, load and show
+        if (AdManager.isAdMobInitialized()) {
+            // Trigger ad load if it isn't already loading or cached
+            if (!AdManager.isAppOpenAdAvailable() && !AdManager.isAppOpenAdLoading()) {
+                AdManager.loadAppOpenAd(context.applicationContext)
+            }
+
+            // Wait up to remaining time of total 8s limit for the ad to load
+            var waitTime = 0
+            val remainingWaitLimit = 8000 - initWaitTime
+            while (!AdManager.isAppOpenAdAvailable() && waitTime < remainingWaitLimit) {
+                delay(500)
+                waitTime += 500
+            }
+
+            if (AdManager.isAppOpenAdAvailable()) {
+                // Show the ad and wait for it to be dismissed before proceeding
+                AdManager.showAppOpenAdOnSplash(activity ?: return@LaunchedEffect) {
+                    onSplashComplete()
+                }
+                return@LaunchedEffect
+            }
         }
+
+        // Proceed without ad if it timed out or initialization failed
+        Log.w("SplashScreen", "App Open Ad timed out or not available, proceeding to app")
+        onSplashComplete()
     }
 
     Box(

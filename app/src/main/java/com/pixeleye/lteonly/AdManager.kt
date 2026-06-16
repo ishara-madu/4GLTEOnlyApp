@@ -16,6 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.Date
 
 object AdManager {
@@ -38,53 +41,31 @@ object AdManager {
     private var isShowingAppOpenAd = false
     private var appOpenAdLoadTime: Long = 0
     private var ignoreNextAppOpenAd = false
-
-    private var cachedBannerAdView: AdView? = null
+    private var lastAppOpenAdShowTime: Long = 0
+    private var lastInterstitialAdShowTime: Long = 0
+    
+    var force4GClickCount = 0
 
     private var isInitialized = false
     private var appContext: Context? = null
     
+    private val _isConsentFlowComplete = MutableStateFlow(false)
+    val isConsentFlowComplete: StateFlow<Boolean> = _isConsentFlowComplete.asStateFlow()
+
+    private val _isConsentFormShowing = MutableStateFlow(false)
+    val isConsentFormShowing: StateFlow<Boolean> = _isConsentFormShowing.asStateFlow()
+
+    fun setConsentFlowComplete(complete: Boolean) {
+        _isConsentFlowComplete.value = complete
+    }
+
+    fun setConsentFormShowing(showing: Boolean) {
+        _isConsentFormShowing.value = showing
+    }
+    
     private var rewardedRetryAttempt = 0
     private var rewardedInterstitialRetryAttempt = 0
     private var appOpenRetryAttempt = 0
-    private var bannerRetryAttempt = 0
-
-    fun preloadBannerAd(context: Context) {
-        if (isProUser) return
-        if (cachedBannerAdView != null) return
-
-        cachedBannerAdView = AdView(context.applicationContext).apply {
-            setAdSize(AdSize.BANNER)
-            adUnitId = BANNER_AD_UNIT_ID
-            adListener = object : AdListener() {
-                override fun onAdFailedToLoad(adError: LoadAdError) {
-                    Log.d(TAG, "Banner ad failed to load: ${adError.message}")
-                    val delayMs = (Math.pow(2.0, bannerRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                    bannerRetryAttempt++
-                    Log.d(TAG, "Scheduling banner ad retry in ${delayMs}ms (Attempt $bannerRetryAttempt)")
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(delayMs)
-                        loadAd(AdRequest.Builder().build())
-                    }
-                }
-                override fun onAdLoaded() {
-                    Log.d(TAG, "Banner ad loaded successfully")
-                    bannerRetryAttempt = 0
-                }
-            }
-            loadAd(AdRequest.Builder().build())
-        }
-    }
-
-    fun getOrCreateBannerAdView(context: Context): AdView {
-        if (isProUser) {
-            return AdView(context)
-        }
-        if (cachedBannerAdView == null) {
-            preloadBannerAd(context)
-        }
-        return cachedBannerAdView ?: AdView(context)
-    }
 
     fun isAdMobInitialized(): Boolean {
         return isInitialized
@@ -95,6 +76,8 @@ object AdManager {
         get() = ProStateManager.isPremiumPro.value
 
     fun initialize(context: Context) {
+        if (isInitialized) return
+        
         appContext = context.applicationContext
         // Trigger initialization asynchronously
         MobileAds.initialize(context) { status ->
@@ -108,9 +91,9 @@ object AdManager {
 
         if (!isProUser) {
             // Instantly trigger background ad pre-loading on startup
-            loadRewardedInterstitial(context) // ONLY preload Rewarded Interstitial
+            loadRewardedInterstitial(context)
+            loadRewarded(context) // Preload Rewarded Ad as well
             loadAppOpenAd(context)
-            preloadBannerAd(context)
         } else {
             Log.d(TAG, "Pro user — skipping ad preloads")
         }
@@ -125,8 +108,6 @@ object AdManager {
         rewardedAd = null
         rewardedInterstitialAd = null
         appOpenAd = null
-        cachedBannerAdView?.destroy()
-        cachedBannerAdView = null
         isRewardedAdLoading = false
         isRewardedInterstitialAdLoading = false
         isAppOpenAdLoading = false
@@ -179,12 +160,16 @@ object AdManager {
                             isRewardedAdLoading = false
                             
                             // Retry with exponential backoff (Policy Compliant)
-                            val delayMs = (Math.pow(2.0, rewardedRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                            rewardedRetryAttempt++
-                            Log.d(TAG, "Scheduling rewarded ad retry in ${delayMs}ms (Attempt $rewardedRetryAttempt)")
-                            CoroutineScope(Dispatchers.Main).launch {
-                                delay(delayMs)
-                                appContext?.let { loadRewarded(it) }
+                            if (rewardedRetryAttempt < 3) {
+                                val delayMs = (Math.pow(2.0, rewardedRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
+                                rewardedRetryAttempt++
+                                Log.d(TAG, "Scheduling rewarded ad retry in ${delayMs}ms (Attempt $rewardedRetryAttempt)")
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(delayMs)
+                                    appContext?.let { loadRewarded(it) }
+                                }
+                            } else {
+                                Log.d(TAG, "Max retries reached for rewarded ad")
                             }
                         }
 
@@ -222,18 +207,12 @@ object AdManager {
         isRewardedInterstitialAdLoading = true
         val currentAttempt = rewardedInterstitialRetryAttempt
 
-        // Timeout guard: if the ad request gets stuck for 15 seconds, reset state and retry.
+        // Timeout guard: if the ad request gets stuck for 15 seconds, reset state.
         CoroutineScope(Dispatchers.Main).launch {
             delay(15000)
             if (isRewardedInterstitialAdLoading && rewardedInterstitialAd == null && currentAttempt == rewardedInterstitialRetryAttempt) {
-                Log.d(TAG, "Rewarded interstitial ad load timed out after 15s. Resetting state and retrying.")
+                Log.d(TAG, "Rewarded interstitial ad load timed out after 15s. Resetting state.")
                 isRewardedInterstitialAdLoading = false
-                val delayMs = (Math.pow(2.0, rewardedInterstitialRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                rewardedInterstitialRetryAttempt++
-                CoroutineScope(Dispatchers.Main).launch {
-                    delay(delayMs)
-                    appContext?.let { loadRewardedInterstitial(it) }
-                }
             }
         }
 
@@ -258,12 +237,16 @@ object AdManager {
                             isRewardedInterstitialAdLoading = false
 
                             // Retry with exponential backoff (for preloaded ad)
-                            val delayMs = (Math.pow(2.0, rewardedInterstitialRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                            rewardedInterstitialRetryAttempt++
-                            Log.d(TAG, "Scheduling rewarded interstitial ad retry in ${delayMs}ms (Attempt $rewardedInterstitialRetryAttempt)")
-                            CoroutineScope(Dispatchers.Main).launch {
-                                delay(delayMs)
-                                appContext?.let { loadRewardedInterstitial(it) }
+                            if (rewardedInterstitialRetryAttempt < 3) {
+                                val delayMs = (Math.pow(2.0, rewardedInterstitialRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
+                                rewardedInterstitialRetryAttempt++
+                                Log.d(TAG, "Scheduling rewarded interstitial ad retry in ${delayMs}ms (Attempt $rewardedInterstitialRetryAttempt)")
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(delayMs)
+                                    appContext?.let { loadRewardedInterstitial(it) }
+                                }
+                            } else {
+                                Log.d(TAG, "Max retries reached for rewarded interstitial ad")
                             }
                         }
 
@@ -302,18 +285,12 @@ object AdManager {
         isAppOpenAdLoading = true
         val currentAttempt = appOpenRetryAttempt
 
-        // Timeout guard: if the ad request gets stuck for 15 seconds, reset state and retry.
+        // Timeout guard: if the ad request gets stuck for 15 seconds, reset state.
         CoroutineScope(Dispatchers.Main).launch {
             delay(15000)
             if (isAppOpenAdLoading && appOpenAd == null && currentAttempt == appOpenRetryAttempt) {
-                Log.d(TAG, "App Open Ad load timed out after 15s. Resetting state and retrying.")
+                Log.d(TAG, "App Open Ad load timed out after 15s. Resetting state.")
                 isAppOpenAdLoading = false
-                val delayMs = (Math.pow(2.0, appOpenRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                appOpenRetryAttempt++
-                CoroutineScope(Dispatchers.Main).launch {
-                    delay(delayMs)
-                    appContext?.let { loadAppOpenAd(it) }
-                }
             }
         }
 
@@ -350,12 +327,16 @@ object AdManager {
                             Log.d(TAG, "App Open Ad failed to load: ${loadAdError.message}")
 
                             // Retry with exponential backoff
-                            val delayMs = (Math.pow(2.0, appOpenRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                            appOpenRetryAttempt++
-                            Log.d(TAG, "Scheduling app open ad retry in ${delayMs}ms (Attempt $appOpenRetryAttempt)")
-                            CoroutineScope(Dispatchers.Main).launch {
-                                delay(delayMs)
-                                appContext?.let { loadAppOpenAd(it) }
+                            if (appOpenRetryAttempt < 3) {
+                                val delayMs = (Math.pow(2.0, appOpenRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
+                                appOpenRetryAttempt++
+                                Log.d(TAG, "Scheduling app open ad retry in ${delayMs}ms (Attempt $appOpenRetryAttempt)")
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(delayMs)
+                                    appContext?.let { loadAppOpenAd(it) }
+                                }
+                            } else {
+                                Log.d(TAG, "Max retries reached for app open ad")
                             }
                         }
                     }
@@ -383,6 +364,12 @@ object AdManager {
 
         if (isShowingAppOpenAd) return
 
+        val timeSinceLastAd = Date().time - lastAppOpenAdShowTime
+        if (timeSinceLastAd < 300000) { // 5 minutes cooldown
+            Log.d(TAG, "Skipping App Open Ad due to 5-minute cooldown")
+            return
+        }
+
         if (ignoreNextAppOpenAd) {
             Log.d(TAG, "Skipping App Open Ad because another fullscreen ad is showing/was just shown")
             ignoreNextAppOpenAd = false
@@ -398,17 +385,19 @@ object AdManager {
             override fun onAdDismissedFullScreenContent() {
                 appOpenAd = null
                 isShowingAppOpenAd = false
-                loadAppOpenAd(activity)
+                loadAppOpenAd(activity.applicationContext)
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 appOpenAd = null
                 isShowingAppOpenAd = false
-                loadAppOpenAd(activity)
+                loadAppOpenAd(activity.applicationContext)
             }
 
             override fun onAdShowedFullScreenContent() {
                 isShowingAppOpenAd = true
+                lastAppOpenAdShowTime = Date().time
+                Log.d(TAG, "App Open Ad showed")
             }
         }
         appOpenAd?.show(activity)
@@ -432,6 +421,12 @@ object AdManager {
 
     fun isRewardedInterstitialAdAvailable(): Boolean {
         return rewardedInterstitialAd != null && !isProUser
+    }
+    
+    fun canShowInterstitialAd(): Boolean {
+        // Enforce a 3-minute cooldown between Interstitial Ads
+        val timeSinceLastAd = Date().time - lastInterstitialAdShowTime
+        return timeSinceLastAd > 180000 // 3 minutes in ms
     }
 
     fun isRewardedInterstitialAdLoading(): Boolean {
@@ -457,18 +452,20 @@ object AdManager {
                     appOpenAd = null
                     isShowingAppOpenAd = false
                     onComplete()
-                    loadAppOpenAd(activity)
+                    loadAppOpenAd(activity.applicationContext)
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                     appOpenAd = null
                     isShowingAppOpenAd = false
                     onComplete()
-                    loadAppOpenAd(activity)
+                    loadAppOpenAd(activity.applicationContext)
                 }
 
                 override fun onAdShowedFullScreenContent() {
                     isShowingAppOpenAd = true
+                    lastAppOpenAdShowTime = Date().time
+                    Log.d(TAG, "App Open Ad showed on splash")
                 }
             }
             appOpenAd?.show(activity)
@@ -502,6 +499,7 @@ object AdManager {
                     } else {
                         Toast.makeText(activity, "Watch the full video to access settings", Toast.LENGTH_LONG).show()
                     }
+                    loadRewarded(activity.applicationContext) // Preload the next rewarded ad
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
@@ -509,6 +507,7 @@ object AdManager {
                     rewardedAd = null
                     onAdShowed()
                     onRewardEarned()
+                    loadRewarded(activity.applicationContext) // Preload again in case of failure
                 }
 
                 override fun onAdShowedFullScreenContent() {
@@ -539,6 +538,13 @@ object AdManager {
             onRewardEarned()
             return
         }
+        
+        if (!canShowInterstitialAd()) {
+            Log.d(TAG, "Cannot show rewarded interstitial ad yet due to cooldown")
+            onAdShowed()
+            onRewardEarned()
+            return
+        }
 
         if (rewardedInterstitialAd != null) {
             ignoreNextAppOpenAd = true
@@ -547,12 +553,13 @@ object AdManager {
                 override fun onAdDismissedFullScreenContent() {
                     Log.d(TAG, "Rewarded interstitial ad dismissed")
                     rewardedInterstitialAd = null
+                    lastInterstitialAdShowTime = Date().time
                     if (rewardEarned) {
                         onRewardEarned()
                     } else {
                         Toast.makeText(activity, "Watch the full video to access settings", Toast.LENGTH_LONG).show()
                     }
-                    loadRewardedInterstitial(activity)
+                    loadRewardedInterstitial(activity.applicationContext)
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
@@ -560,7 +567,7 @@ object AdManager {
                     rewardedInterstitialAd = null
                     onAdShowed()
                     onRewardEarned()
-                    loadRewardedInterstitial(activity)
+                    loadRewardedInterstitial(activity.applicationContext)
                 }
 
                 override fun onAdShowedFullScreenContent() {

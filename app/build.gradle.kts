@@ -23,18 +23,18 @@ android {
         applicationId = "com.pixeleye.lteonly"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12
-        versionName = "2.2"
+        versionCode = 14
+        versionName = "2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // BuildConfig fields from local.properties
+        // BuildConfig fields from local.properties (with fallback to official Google AdMob Test IDs if missing)
         val revenueCatKey = localProperties.getProperty("REVENUECAT_API_KEY") ?: ""
-        val admobAppId = localProperties.getProperty("ADMOB_APP_ID") ?: ""
-        val admobRewardedId = localProperties.getProperty("ADMOB_REWARDED_ID") ?: ""
-        val admobRewardedInterstitialId = localProperties.getProperty("ADMOB_REWARDED_INTERSTITIAL_ID") ?: ""
-        val admobAppOpenId = localProperties.getProperty("ADMOB_APP_OPEN_ID") ?: ""
-        val admobBannerId = localProperties.getProperty("ADMOB_BANNER_ID") ?: ""
+        val admobAppId = localProperties.getProperty("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
+        val admobRewardedId = localProperties.getProperty("ADMOB_REWARDED_ID") ?: "ca-app-pub-3940256099942544/5224354917"
+        val admobRewardedInterstitialId = localProperties.getProperty("ADMOB_REWARDED_INTERSTITIAL_ID") ?: "ca-app-pub-3940256099942544/5354046379"
+        val admobAppOpenId = localProperties.getProperty("ADMOB_APP_OPEN_ID") ?: "ca-app-pub-3940256099942544/9257395921"
+        val admobBannerId = localProperties.getProperty("ADMOB_BANNER_ID") ?: "ca-app-pub-3940256099942544/6300978111"
 
         buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobRewardedId\"")
@@ -101,6 +101,9 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.inappmessaging.display)
     implementation(libs.firebase.analytics)
+
+    // User Messaging Platform for GDPR consent
+    implementation("com.google.android.ump:user-messaging-platform:3.0.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -28,11 +28,10 @@ class LTEOnlyApplication : Application(), Application.ActivityLifecycleCallbacks
 
     override fun onCreate() {
         super<Application>.onCreate()
-        // Initialize AdMob AdManager
-        AdManager.initialize(this)
+        // AdManager initialization moved to MainActivity.kt for GDPR compliance
 
         // Initialize RevenueCat
-        Purchases.logLevel = LogLevel.DEBUG
+        Purchases.logLevel = LogLevel.WARN
         Purchases.configure(
             PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY).build()
         )
@@ -43,16 +42,7 @@ class LTEOnlyApplication : Application(), Application.ActivityLifecycleCallbacks
         // Check entitlement at launch so the pro state is available immediately
         ProStateManager.checkEntitlement()
 
-        // Temporarily log Firebase Installation ID for In-App Messaging testing
-        com.google.firebase.installations.FirebaseInstallations.getInstance().id.addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                android.util.Log.d("FIREBASE_FID", "==================================================")
-                android.util.Log.d("FIREBASE_FID", "Your Firebase Installation ID is: ${task.result}")
-                android.util.Log.d("FIREBASE_FID", "==================================================")
-            } else {
-                android.util.Log.e("FIREBASE_FID", "Failed to get Firebase Installation ID", task.exception)
-            }
-        }
+        // Firebase Installation ID logging removed for production.
         
         // Register lifecycle callbacks
         registerActivityLifecycleCallbacks(this)
