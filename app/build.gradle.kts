@@ -32,13 +32,13 @@ android {
         val revenueCatKey = localProperties.getProperty("REVENUECAT_API_KEY") ?: ""
         val admobAppId = localProperties.getProperty("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
         val admobRewardedId = localProperties.getProperty("ADMOB_REWARDED_ID") ?: "ca-app-pub-3940256099942544/5224354917"
-        val admobRewardedInterstitialId = localProperties.getProperty("ADMOB_REWARDED_INTERSTITIAL_ID") ?: "ca-app-pub-3940256099942544/5354046379"
+        val admobInterstitialId = localProperties.getProperty("ADMOB_INTERSTITIAL_ID") ?: "ca-app-pub-3940256099942544/1033173712"
         val admobAppOpenId = localProperties.getProperty("ADMOB_APP_OPEN_ID") ?: "ca-app-pub-3940256099942544/9257395921"
         val admobBannerId = localProperties.getProperty("ADMOB_BANNER_ID") ?: "ca-app-pub-3940256099942544/6300978111"
 
         buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobRewardedId\"")
-        buildConfigField("String", "ADMOB_REWARDED_INTERSTITIAL_ID", "\"$admobRewardedInterstitialId\"")
+        buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"$admobInterstitialId\"")
         buildConfigField("String", "ADMOB_APP_OPEN_ID", "\"$admobAppOpenId\"")
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$admobBannerId\"")
         

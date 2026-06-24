@@ -867,7 +867,6 @@ fun HomeTab(
     val scrollState = rememberScrollState()
     var showDeviceCodesSheet by remember { mutableStateOf(false) }
     var pendingReviewTrigger by remember { mutableStateOf(false) }
-    var isWaitingForAd by remember { mutableStateOf(false) }
     var showLoadErrorDialog by remember { mutableStateOf(false) }
 
     val isPremiumPro by ProStateManager.isPremiumPro.collectAsStateWithLifecycle()
@@ -964,7 +963,6 @@ fun HomeTab(
                 pendingReviewTrigger = true
                 val activity = context as? android.app.Activity
                 val openInfo = {
-                    isWaitingForAd = false
                     try {
                         RadioInfoHelper.openRadioInfo(context)
                     } catch (e: Exception) {
@@ -973,10 +971,17 @@ fun HomeTab(
                 }
 
                 if (activity != null && !isPremiumPro) {
-                    if (AdManager.canShowInterstitialAd()) {
-                        isWaitingForAd = true
+                    if (AdManager.canShowInterstitialAd() && AdManager.isInterstitialAdAvailable()) {
+                        AdManager.showInterstitial(
+                            activity = activity,
+                            onAdShowed = { /* no-op */ },
+                            onAdDismissed = { openInfo() }
+                        )
                     } else {
                         openInfo()
+                        if (!AdManager.isInterstitialAdAvailable() && !AdManager.isInterstitialAdLoading()) {
+                            AdManager.loadInterstitial(activity)
+                        }
                     }
                 } else {
                     openInfo()
@@ -1127,127 +1132,7 @@ fun HomeTab(
             DeviceCodesBottomSheet(onDismiss = { showDeviceCodesSheet = false })
         }
 
-        if (isWaitingForAd) {
-            val activity = context as? android.app.Activity
-            LaunchedEffect(Unit) {
-                if (activity != null) {
-                    if (!AdManager.isRewardedInterstitialAdAvailable() && !AdManager.isRewardedInterstitialAdLoading()) {
-                        AdManager.loadRewardedInterstitial(activity)
-                    }
-                }
-                
-                // Provide sufficient time (3.5s) for the user to read the intro screen and opt-out if desired.
-                delay(3500)
-                
-                val startTime = System.currentTimeMillis()
-                var adShownSuccess = false
-                while (System.currentTimeMillis() - startTime < 16500) {
-                    if (AdManager.isRewardedInterstitialAdAvailable()) {
-                        if (activity != null) {
-                            AdManager.showRewardedInterstitial(
-                                activity = activity,
-                                onAdShowed = { isWaitingForAd = false },
-                                onRewardEarned = {
-                                    adShownSuccess = true
-                                    try {
-                                        RadioInfoHelper.openRadioInfo(context)
-                                    } catch (e: Exception) {
-                                        showDeviceCodesSheet = true
-                                    }
-                                }
-                            )
-                        }
-                        return@LaunchedEffect
-                    }
-                    if (!AdManager.isRewardedInterstitialAdLoading() && !AdManager.isRewardedInterstitialAdAvailable() && activity != null) {
-                        AdManager.loadRewardedInterstitial(activity)
-                    }
-                    delay(200)
-                }
-                isWaitingForAd = false
-                if (!adShownSuccess) {
-                    try {
-                        RadioInfoHelper.openRadioInfo(context)
-                    } catch (e: Exception) {
-                        showDeviceCodesSheet = true
-                    }
-                }
-            }
 
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { /* Prevent dismiss */ },
-                properties = androidx.compose.ui.window.DialogProperties(
-                    dismissOnBackPress = false,
-                    dismissOnClickOutside = false,
-                    usePlatformDefaultWidth = false
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .shadow(12.dp, RoundedCornerShape(24.dp))
-                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = TextTeal,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        Text(
-                            text = "Sponsored Access",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = TextPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        Text(
-                            text = "Watch a short ad to continue, or upgrade to Pro for ad-free access.",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(NeumorphicBackground, RoundedCornerShape(12.dp))
-                                .clickable { isWaitingForAd = false },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                fontFamily = PoppinsFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
     }
 }
