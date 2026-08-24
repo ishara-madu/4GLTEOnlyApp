@@ -23,8 +23,8 @@ android {
         applicationId = "com.pixeleye.lteonly"
         minSdk = 24
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.5"
+        versionCode = 17
+        versionName = "2.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
