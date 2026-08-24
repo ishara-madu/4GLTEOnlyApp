@@ -42,7 +42,7 @@ import com.pixeleye.lteonly.ui.theme.TextSecondary
 import com.pixeleye.lteonly.ui.theme.neumorphic
 
 @Composable
-fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = null) {
+fun PremiumUpgradeScreen(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? Activity
     
@@ -111,7 +111,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = 
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         Text(
-                            text = "Pro Mode Activated!",
+                            text = "Ad-Free Activated!",
                             color = TextPrimary,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
@@ -168,7 +168,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = 
 
                 // Title
                 Text(
-                    text = "LTE ONLY PRO",
+                    text = "GO AD-FREE",
                     color = TextPrimary,
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
@@ -176,7 +176,7 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = 
                 )
 
                 Text(
-                    text = "ELEVATE YOUR CONNECTIVITY",
+                    text = "UNINTERRUPTED NETWORK TOOLS",
                     color = TextSecondary,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -192,19 +192,19 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = 
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     FeatureRow(
-                        iconRes = R.drawable.gaming,
-                        title = "Game Servers Ping Analyzer",
-                        description = "Real-time regional server tests."
-                    )
-                    FeatureRow(
-                        iconRes = R.drawable.analytics,
-                        title = "Pro Analytics",
-                        description = "Remove blur effect and view clear historical data charts (data limited to recent results)."
-                    )
-                    FeatureRow(
                         iconRes = R.drawable.ad_free,
-                        title = "Ad-Free Interface",
-                        description = "Completely remove all banner and interstitial ads."
+                        title = "100% Ad-Free Experience",
+                        description = "Completely remove all banner, interstitial, and app open ads."
+                    )
+                    FeatureRow(
+                        iconRes = R.drawable.tools,
+                        title = "Instant & Fluid Performance",
+                        description = "Zero ad latency, lower data usage, and minimal battery overhead."
+                    )
+                    FeatureRow(
+                        iconRes = R.drawable.support,
+                        title = "Support Development",
+                        description = "Help support future feature updates and network tool enhancements."
                     )
                 }
 
@@ -289,43 +289,6 @@ fun PremiumUpgradeScreen(onDismiss: () -> Unit, onWatchAdClick: (() -> Unit)? = 
                         Text(
                             text = "Upgrade Now",
                             color = MaterialTheme.colorScheme.onPrimary,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                if (onWatchAdClick != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "OR",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = { 
-                            onDismiss()
-                            onWatchAdClick() 
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                        shape = RoundedCornerShape(28.dp),
-                        enabled = !isPurchasing
-                    ) {
-                        Icon(
-                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.tools), // Assuming a suitable icon exists
-                            contentDescription = "Watch Ad",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Watch Ad to Unlock for Session",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

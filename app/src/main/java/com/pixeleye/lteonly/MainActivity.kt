@@ -206,14 +206,8 @@ fun DashboardScreen(themeManager: ThemeManager) {
     val context = LocalContext.current
 
     // Pro state from RevenueCat
-    val isUserPro by ProStateManager.isUserPro.collectAsStateWithLifecycle()
     val isPremiumPro by ProStateManager.isPremiumPro.collectAsStateWithLifecycle()
     var showPaywall by remember { mutableStateOf(false) }
-
-    var isWaitingForTempProAd by remember { mutableStateOf(false) }
-    var showTempProConsentDialog by remember { mutableStateOf(false) }
-    var showTempProLoadErrorDialog by remember { mutableStateOf(false) }
-    val onWatchAdToUnlockClick = { showTempProConsentDialog = true }
 
     var hasPermission by remember { mutableStateOf(false) }
     var networkInfo by remember { mutableStateOf(NetworkInfo()) }
@@ -381,20 +375,15 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 telephonyService = telephonyService,
                 context = context,
                 hasPermission = hasPermission,
-                isUserPro = isUserPro,
                 onHowToUseClick = { showHowToUseSheet = true },
-                onUpgradeClick = { showPaywall = true },
-                onWatchAdToUnlockClick = onWatchAdToUnlockClick
+                onUpgradeClick = { showPaywall = true }
             )
             1 -> AnalyticsTab(
                 networkInfo = networkInfo,
                 signalHistory = storedSignalHistory,
                 speedTests = storedSpeedTests,
                 pingTests = storedPingTests,
-                gameServers = gameServers,
-                isUserPro = isUserPro,
-                onUpgradeClick = { showPaywall = true },
-                onWatchAdToUnlockClick = onWatchAdToUnlockClick
+                gameServers = gameServers
             )
             2 -> ToolsTab(
                 telephonyService = telephonyService,
@@ -404,15 +393,10 @@ fun DashboardScreen(themeManager: ThemeManager) {
                 speedTestResult = speedTestResult,
                 pingTestResult = pingTestResult,
                 gameServers = gameServers,
-                isUserPro = isUserPro,
-                onUpgradeClick = { showPaywall = true },
-                onWatchAdToUnlockClick = onWatchAdToUnlockClick,
                 isPingStabilizerEnabled = isPingStabilizerEnabled,
                 onTogglePingStabilizer = { enabled, targetIp ->
                     if (enabled) {
-                        if (!isUserPro) {
-                            showPaywall = true
-                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && 
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && 
                             androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                         } else {
@@ -490,277 +474,15 @@ fun DashboardScreen(themeManager: ThemeManager) {
         // Paywall dialog
         if (showPaywall) {
             PremiumUpgradeScreen(
-                onDismiss = { showPaywall = false },
-                onWatchAdClick = {
-                    showPaywall = false
-                    onWatchAdToUnlockClick()
-                }
+                onDismiss = { showPaywall = false }
             )
         }
 
         if (showHowToUseSheet) {
             HowToUseBottomSheet(onDismiss = { showHowToUseSheet = false })
         }
-        
-        // --- TEMP PRO AD LOGIC ---
-        if (isWaitingForTempProAd) {
-            val activity = context as? android.app.Activity
-            LaunchedEffect(Unit) {
-                if (activity != null) {
-                    if (!AdManager.isRewardedAdAvailable() && !AdManager.isRewardedAdLoading()) {
-                        AdManager.loadRewarded(activity)
-                    }
-                    val startTime = System.currentTimeMillis()
-                    var adShownSuccess = false
-                    while (System.currentTimeMillis() - startTime < 20000) {
-                        if (AdManager.isRewardedAdAvailable()) {
-                            AdManager.showRewarded(
-                                activity = activity,
-                                onAdShowed = { isWaitingForTempProAd = false },
-                                onRewardEarned = {
-                                    adShownSuccess = true
-                                    ProStateManager.activateTempPro(context)
-                                    android.widget.Toast.makeText(context, "Pro Unlocked for this session!", android.widget.Toast.LENGTH_LONG).show()
-                                }
-                            )
-                            return@LaunchedEffect
-                        }
-                        kotlinx.coroutines.delay(100)
-                    }
-                    isWaitingForTempProAd = false
-                    if (!adShownSuccess) {
-                        showTempProLoadErrorDialog = true
-                    }
-                }
-            }
-
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = {},
-                properties = androidx.compose.ui.window.DialogProperties(
-                    dismissOnBackPress = false,
-                    dismissOnClickOutside = false,
-                    usePlatformDefaultWidth = false
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .shadow(12.dp, RoundedCornerShape(24.dp))
-                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = TextTeal,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        Text(
-                            text = "Sponsored Access",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = TextPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        Text(
-                            text = "Watch a short ad to continue, or upgrade to Pro for ad-free access.",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(NeumorphicBackground, RoundedCornerShape(12.dp))
-                                .clickable { isWaitingForTempProAd = false },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                fontFamily = PoppinsFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showTempProConsentDialog) {
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { showTempProConsentDialog = false },
-                properties = androidx.compose.ui.window.DialogProperties(
-                    usePlatformDefaultWidth = false
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable { showTempProConsentDialog = false },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .shadow(12.dp, RoundedCornerShape(24.dp))
-                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
-                            .clickable(enabled = false) {} // Prevent click-through
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Watch Video to Unlock",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = TextPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        Text(
-                            text = "To access advanced network settings, please watch a short video ad. This supports our free service.",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Cancel Button
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(NeumorphicBackground, RoundedCornerShape(12.dp))
-                                    .clickable { showTempProConsentDialog = false },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Cancel",
-                                    fontFamily = PoppinsFamily,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                    color = TextSecondary
-                                )
-                            }
-
-                            // Watch Ad Button
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        brush = Brush.linearGradient(GradientColors),
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        showTempProConsentDialog = false
-                                        isWaitingForTempProAd = true 
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Watch Video",
-                                    fontFamily = PoppinsFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showTempProLoadErrorDialog) {
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { showTempProLoadErrorDialog = false },
-                properties = androidx.compose.ui.window.DialogProperties(
-                    usePlatformDefaultWidth = false
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable { showTempProLoadErrorDialog = false },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .shadow(12.dp, RoundedCornerShape(24.dp))
-                            .background(NeumorphicBackground, RoundedCornerShape(24.dp))
-                            .clickable(enabled = false) {}
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "No Ads Available",
-                            fontFamily = PoppinsFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = TextPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Sorry, we couldn't load an ad right now. Please try again later.",
-                            fontFamily = PoppinsFamily,
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = { showTempProLoadErrorDialog = false },
-                            colors = ButtonDefaults.buttonColors(containerColor = TextTeal),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Okay", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
     }
-    }
+}
 
 
 }
@@ -859,10 +581,8 @@ fun HomeTab(
     telephonyService: TelephonyService,
     context: Context,
     hasPermission: Boolean = true,
-    isUserPro: Boolean = false,
     onHowToUseClick: () -> Unit = {},
-    onUpgradeClick: () -> Unit = {},
-    onWatchAdToUnlockClick: () -> Unit = {}
+    onUpgradeClick: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     var showDeviceCodesSheet by remember { mutableStateOf(false) }
@@ -870,7 +590,6 @@ fun HomeTab(
     var showLoadErrorDialog by remember { mutableStateOf(false) }
 
     val isPremiumPro by ProStateManager.isPremiumPro.collectAsStateWithLifecycle()
-    val isTempProActive by ProStateManager.isTempProActive.collectAsStateWithLifecycle()
     
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -990,47 +709,8 @@ fun HomeTab(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Show countdown if temporary Pro is active
-            if (isTempProActive && !isPremiumPro) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color(0xFF00B0FF), Color(0xFF00E5FF)),
-                                start = Offset.Zero,
-                                end = Offset(400f, 0f)
-                            )
-                        )
-                        .padding(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "✨ Pro Unlocked for this Session",
-                                style = Typography.titleMedium.copy(fontSize = 18.sp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "All premium tools unlocked until you close the app.",
-                                style = Typography.bodyMedium.copy(fontSize = 13.sp),
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-
-            // Upgrade to Pro / Watch ad to try Pro — hidden for permanent/temporary pro users
-            if (!isUserPro) {
+            // Upgrade to Pro (Go Ad-Free) — hidden for premium users
+            if (!isPremiumPro) {
                 // Upgrade to Pro Banner
                 Box(
                     modifier = Modifier
@@ -1053,14 +733,14 @@ fun HomeTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Upgrade to Pro",
+                                text = "Go Ad-Free",
                                 style = Typography.titleMedium.copy(fontSize = 18.sp),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Remove all ads & unlock premium features",
+                                text = "Remove all ads for a clean, uninterrupted experience",
                                 style = Typography.bodyMedium.copy(fontSize = 13.sp),
                                 color = Color.White.copy(alpha = 0.85f)
                             )
@@ -1068,53 +748,6 @@ fun HomeTab(
                         Icon(
                             painter = androidx.compose.ui.res.painterResource(id = R.drawable.pro),
                             contentDescription = "Upgrade",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Watch Ad to Try Pro Card
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = GradientColors,
-                                start = Offset.Zero,
-                                end = Offset(400f, 0f)
-                            )
-                        )
-                        .clickable {
-                            onWatchAdToUnlockClick()
-                        }
-                        .padding(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Watch Ad to Unlock Pro",
-                                style = Typography.titleMedium.copy(fontSize = 18.sp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Get full access for this session for free.",
-                                style = Typography.bodyMedium.copy(fontSize = 13.sp),
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
-                        }
-                        Icon(
-                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.gift),
-                            contentDescription = "Try Pro",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
@@ -1147,10 +780,7 @@ fun AnalyticsTab(
     signalHistory: List<SignalHistoryEntity>,
     speedTests: List<SpeedTestEntity>,
     pingTests: List<PingTestEntity>,
-    gameServers: List<GameServer>,
-    isUserPro: Boolean = false,
-    onUpgradeClick: () -> Unit = {},
-    onWatchAdToUnlockClick: () -> Unit = {}
+    gameServers: List<GameServer>
 ) {
     val scrollState = rememberScrollState()
     val currentRsrp = networkInfo.signalStrength.rsrp
@@ -1158,13 +788,11 @@ fun AnalyticsTab(
     val signalRsrpHistory = signalHistory.map { it.rsrp }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Main analytics content — blurred when not pro
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState, enabled = isUserPro)
-                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
-                .then(if (!isUserPro) Modifier.blur(15.dp) else Modifier),
+                .verticalScroll(scrollState)
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -1271,96 +899,6 @@ fun AnalyticsTab(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
-
-        // Lock overlay for non-pro users
-        if (!isUserPro) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 48.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
-                                ),
-                                CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.subscription),
-                            contentDescription = "Locked",
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(
-                        text = "Pro Analytics Locked",
-                        style = Typography.titleLarge.copy(fontSize = 22.sp),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Upgrade to view detailed signal history, speed trends, and ping analytics.",
-                        style = Typography.bodyMedium.copy(fontSize = 14.sp),
-                        color = Color.White.copy(alpha = 0.8f),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
-                                )
-                            )
-                            .clickable { onUpgradeClick() }
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Upgrade to Pro",
-                            color = Color.White,
-                            style = Typography.bodyLarge.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Watch Ad to Unlock Alternative
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .clickable { onWatchAdToUnlockClick() }
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Watch Ad to Unlock",
-                            color = Color.White,
-                            style = Typography.bodyLarge.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -1411,14 +949,11 @@ fun ToolsTab(
     speedTestResult: SpeedTestResult?,
     pingTestResult: PingTestResult?,
     gameServers: List<GameServer>,
-    isUserPro: Boolean = false,
-    onUpgradeClick: () -> Unit = {},
     isPingStabilizerEnabled: Boolean = false,
     onTogglePingStabilizer: (Boolean, String) -> Unit = { _, _ -> },
     onSpeedTestClick: () -> Unit,
     onPingTestClick: () -> Unit,
-    context: Context,
-    onWatchAdToUnlockClick: () -> Unit = {}
+    context: Context
 ) {
     val scrollState = rememberScrollState()
     
@@ -1460,14 +995,12 @@ fun ToolsTab(
         PingStabilizerCard(
             isPingStabilizerEnabled = isPingStabilizerEnabled,
             onTogglePingStabilizer = onTogglePingStabilizer,
-            isUserPro = isUserPro,
-            onUpgradeClick = onUpgradeClick,
             settingsManager = settingsManager
         )
         
         Spacer(modifier = Modifier.height(16.dp))
 
-        GameServersPingCard(gameServers, telephonyService, isUserPro, onUpgradeClick)
+        GameServersPingCard(gameServers, telephonyService)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -3521,9 +3054,7 @@ val GameServerColors = listOf(
 @Composable
 fun GameServersPingCard(
     gameServers: List<GameServer>,
-    telephonyService: TelephonyService,
-    isUserPro: Boolean = false,
-    onUpgradeClick: () -> Unit = {}
+    telephonyService: TelephonyService
 ) {
     var showSheet by remember { mutableStateOf(false) }
     
@@ -3533,11 +3064,7 @@ fun GameServersPingCard(
             .neumorphic(cornerRadius = 24.dp, elevation = 6.dp)
             .background(NeumorphicBackground, RoundedCornerShape(24.dp))
             .clickable {
-                if (isUserPro) {
-                    showSheet = true
-                } else {
-                    onUpgradeClick()
-                }
+                showSheet = true
             }
             .padding(20.dp)
     ) {
@@ -3550,28 +3077,7 @@ fun GameServersPingCard(
                 Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.gaming), contentDescription = null, tint = GradientStart, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("GAMING PING ANALYZER", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
-                        if (!isUserPro) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
-                                        ),
-                                        RoundedCornerShape(6.dp)
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "PRO",
-                                    style = Typography.labelMedium.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
+                    Text("GAMING PING ANALYZER", style = Typography.labelMedium.copy(fontSize = 10.sp), color = TextSecondary, letterSpacing = 1.sp)
                     Text("Regional Server Test", style = Typography.titleMedium.copy(fontSize = 18.sp), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -3836,13 +3342,10 @@ fun ChartLegend(servers: List<GameServer>) {
         }
     }
 }
-
 @Composable
 fun PingStabilizerCard(
     isPingStabilizerEnabled: Boolean,
     onTogglePingStabilizer: (Boolean, String) -> Unit,
-    isUserPro: Boolean,
-    onUpgradeClick: () -> Unit,
     settingsManager: SettingsManager
 ) {
     val pingHistory by PingStabilizerService.pingHistory.collectAsState()
@@ -3863,32 +3366,11 @@ fun PingStabilizerCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Ping Stabilizer", 
-                            style = Typography.titleMedium, 
-                            color = TextPrimary
-                        )
-                        if (!isUserPro) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(0xFF6C63FF), Color(0xFFE040FB))
-                                        ),
-                                        RoundedCornerShape(6.dp)
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "PRO",
-                                    style = Typography.labelMedium.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = "Ping Stabilizer", 
+                        style = Typography.titleMedium, 
+                        color = TextPrimary
+                    )
                     Text(
                         text = "Prevents connection sleeping to reduce lag spikes", 
                         style = Typography.labelSmall, 
@@ -3898,11 +3380,7 @@ fun PingStabilizerCard(
                 androidx.compose.material3.Switch(
                     checked = isPingStabilizerEnabled,
                     onCheckedChange = { 
-                        if (!isUserPro) {
-                            onUpgradeClick()
-                        } else {
-                            onTogglePingStabilizer(it, targetIp) 
-                        }
+                        onTogglePingStabilizer(it, targetIp) 
                     },
                     colors = androidx.compose.material3.SwitchDefaults.colors(
                         checkedThumbColor = Color.White,

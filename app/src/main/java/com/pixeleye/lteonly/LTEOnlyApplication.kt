@@ -55,7 +55,6 @@ class LTEOnlyApplication : Application(), Application.ActivityLifecycleCallbacks
         super<DefaultLifecycleObserver>.onResume(owner)
         // Refresh entitlement status whenever app returns to foreground
         ProStateManager.checkEntitlement()
-        ProStateManager.checkTempProExpiry(this)
 
         // Skip App Open Ad entirely for Premium Pro users
         if (ProStateManager.isPremiumPro.value) return

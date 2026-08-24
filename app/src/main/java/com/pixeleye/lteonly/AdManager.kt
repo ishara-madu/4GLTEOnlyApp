@@ -7,8 +7,6 @@ import android.widget.Toast
 import com.google.android.gms.ads.*
 import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
-import com.google.android.gms.ads.rewarded.RewardedAd
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import kotlinx.coroutines.CoroutineScope
@@ -25,14 +23,10 @@ object AdManager {
     private const val TAG = "AdManager"
     
     // Ad Unit IDs from BuildConfig
-    private val REWARDED_AD_UNIT_ID = BuildConfig.ADMOB_REWARDED_ID
     private val INTERSTITIAL_AD_UNIT_ID = BuildConfig.ADMOB_INTERSTITIAL_ID
     val APP_OPEN_AD_UNIT_ID = BuildConfig.ADMOB_APP_OPEN_ID
     val BANNER_AD_UNIT_ID = BuildConfig.ADMOB_BANNER_ID
  
-    private var rewardedAd: RewardedAd? = null
-    private var isRewardedAdLoading = false
-    
     private var interstitialAd: InterstitialAd? = null
     private var isInterstitialAdLoading = false
  
@@ -63,7 +57,6 @@ object AdManager {
         _isConsentFormShowing.value = showing
     }
     
-    private var rewardedRetryAttempt = 0
     private var interstitialRetryAttempt = 0
     private var appOpenRetryAttempt = 0
  
@@ -92,7 +85,6 @@ object AdManager {
         if (!isProUser) {
             // Instantly trigger background ad pre-loading on startup
             loadInterstitial(context)
-            loadRewarded(context) // Preload Rewarded Ad as well
             loadAppOpenAd(context)
         } else {
             Log.d(TAG, "Pro user — skipping ad preloads")
@@ -105,92 +97,11 @@ object AdManager {
      */
     fun clearAllAds() {
         Log.d(TAG, "Clearing all cached ads for Pro user")
-        rewardedAd = null
         interstitialAd = null
         appOpenAd = null
-        isRewardedAdLoading = false
         isInterstitialAdLoading = false
         isAppOpenAdLoading = false
         isShowingAppOpenAd = false
-    }
-
-    fun loadRewarded(context: Context) {
-        if (isProUser) {
-            Log.d(TAG, "Pro user — skipping rewarded load")
-            return
-        }
-        // Requirement 3: Avoid Redundant Requests
-        if (rewardedAd != null || isRewardedAdLoading) {
-            Log.d(TAG, "Rewarded ad already loaded or loading — skipping redundant request")
-            return
-        }
-
-        isRewardedAdLoading = true
-        val currentAttempt = rewardedRetryAttempt
-
-        // Timeout guard: if the ad request gets stuck for 15 seconds, reset state and retry.
-        CoroutineScope(Dispatchers.Main).launch {
-            delay(15000)
-            if (isRewardedAdLoading && rewardedAd == null && currentAttempt == rewardedRetryAttempt) {
-                Log.d(TAG, "Rewarded ad load timed out after 15s. Resetting state.")
-                isRewardedAdLoading = false
-                // Note: since this is loaded on demand, we don't automatically retry on timeout
-                // to prevent background requests when user has already given up.
-            }
-        }
-
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                if (isProUser) {
-                    isRewardedAdLoading = false
-                    return@launch
-                }
-                val adRequest = withContext(Dispatchers.Default) {
-                    AdRequest.Builder().build()
-                }
-
-                RewardedAd.load(
-                    context,
-                    REWARDED_AD_UNIT_ID,
-                    adRequest,
-                    object : RewardedAdLoadCallback() {
-                        override fun onAdFailedToLoad(adError: LoadAdError) {
-                            Log.d(TAG, "Rewarded ad failed to load: ${adError.message}")
-                            rewardedAd = null
-                            isRewardedAdLoading = false
-                            
-                            // Retry with exponential backoff (Policy Compliant)
-                            if (rewardedRetryAttempt < 3) {
-                                val delayMs = (Math.pow(2.0, rewardedRetryAttempt.toDouble()) * 2000).toLong().coerceAtMost(60000)
-                                rewardedRetryAttempt++
-                                Log.d(TAG, "Scheduling rewarded ad retry in ${delayMs}ms (Attempt $rewardedRetryAttempt)")
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    delay(delayMs)
-                                    appContext?.let { loadRewarded(it) }
-                                }
-                            } else {
-                                Log.d(TAG, "Max retries reached for rewarded ad")
-                            }
-                        }
-
-                        override fun onAdLoaded(ad: RewardedAd) {
-                            Log.d(TAG, "Rewarded ad loaded successfully")
-                            rewardedRetryAttempt = 0
-                            if (isProUser) {
-                                Log.d(TAG, "Pro user detected after rewarded load — discarding")
-                                isRewardedAdLoading = false
-                                return
-                            }
-                            rewardedAd = ad
-                            isRewardedAdLoading = false
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Rewarded ad asynchronously", e)
-                isRewardedAdLoading = false
-            }
-        }
     }
 
     fun loadInterstitial(context: Context) {
@@ -411,14 +322,6 @@ object AdManager {
         return isAppOpenAdLoading
     }
 
-    fun isRewardedAdAvailable(): Boolean {
-        return rewardedAd != null && !isProUser
-    }
-
-    fun isRewardedAdLoading(): Boolean {
-        return isRewardedAdLoading && !isProUser
-    }
-
     fun isInterstitialAdAvailable(): Boolean {
         return interstitialAd != null && !isProUser
     }
@@ -471,58 +374,6 @@ object AdManager {
             appOpenAd?.show(activity)
         } else {
             onComplete()
-        }
-    }
-
-    fun showRewarded(
-        activity: Activity,
-        onAdShowed: () -> Unit = {},
-        onRewardEarned: () -> Unit = {}
-    ) {
-        if (isProUser) {
-            rewardedAd = null
-            Log.d(TAG, "Pro user — blocking rewarded ad")
-            onAdShowed()
-            onRewardEarned()
-            return
-        }
-
-        if (rewardedAd != null) {
-            ignoreNextAppOpenAd = true
-            var rewardEarned = false
-            rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-                override fun onAdDismissedFullScreenContent() {
-                    Log.d(TAG, "Rewarded ad dismissed")
-                    rewardedAd = null
-                    if (rewardEarned) {
-                        onRewardEarned()
-                    } else {
-                        Toast.makeText(activity, "Watch the full video to access settings", Toast.LENGTH_LONG).show()
-                    }
-                    loadRewarded(activity.applicationContext) // Preload the next rewarded ad
-                }
-
-                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                    Log.d(TAG, "Rewarded ad failed to show: ${adError.message}")
-                    rewardedAd = null
-                    onAdShowed()
-                    onRewardEarned()
-                    loadRewarded(activity.applicationContext) // Preload again in case of failure
-                }
-
-                override fun onAdShowedFullScreenContent() {
-                    Log.d(TAG, "Rewarded ad showed full screen")
-                    onAdShowed()
-                }
-            }
-            rewardedAd?.show(activity) { rewardItem ->
-                Log.d(TAG, "User earned reward: ${rewardItem.amount} ${rewardItem.type}")
-                rewardEarned = true
-            }
-        } else {
-            Log.d(TAG, "Rewarded ad not ready yet")
-            onAdShowed()
-            onRewardEarned()
         }
     }
 
