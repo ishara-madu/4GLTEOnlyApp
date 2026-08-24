@@ -67,7 +67,9 @@ import com.google.android.play.core.review.ReviewManagerFactory
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
 import com.google.android.play.core.install.model.UpdateAvailability
 import android.app.Activity.RESULT_OK
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -78,7 +80,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import java.util.concurrent.TimeUnit
-// Removed unused material icons imports
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.graphics.nativeCanvas
@@ -90,6 +91,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var themeManager: ThemeManager
     private lateinit var appUpdateManager: AppUpdateManager
     private val updateType = AppUpdateType.FLEXIBLE
+    private var isUpdateDownloaded by mutableStateOf(false)
+
+    private val installStateUpdatedListener = InstallStateUpdatedListener { state ->
+        if (state.installStatus() == InstallStatus.DOWNLOADED) {
+            isUpdateDownloaded = true
+        }
+    }
 
     private val updateLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -106,6 +114,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         themeManager = ThemeManager.getInstance(this)
         appUpdateManager = AppUpdateManagerFactory.create(this)
+        appUpdateManager.registerListener(installStateUpdatedListener)
 
         checkForAppUpdates()
 
@@ -163,6 +172,17 @@ class MainActivity : ComponentActivity() {
                 } else {
                     DashboardScreen(themeManager)
                 }
+
+                if (isUpdateDownloaded) {
+                    UpdateDownloadedDialog(
+                        onRestart = {
+                            appUpdateManager.completeUpdate()
+                        },
+                        onDismiss = {
+                            isUpdateDownloaded = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -186,7 +206,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::appUpdateManager.isInitialized) {
             appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED) {
+                    isUpdateDownloaded = true
+                } else if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
                     // If an in-app update is already running, resume the update.
                     appUpdateManager.startUpdateFlowForResult(
                         appUpdateInfo,
@@ -195,6 +217,13 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::appUpdateManager.isInitialized) {
+            appUpdateManager.unregisterListener(installStateUpdatedListener)
         }
     }
 }
@@ -2825,6 +2854,73 @@ private fun AboutBottomSheet(onDismiss: () -> Unit) {
             })
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun UpdateDownloadedDialog(
+    onRestart: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(NeumorphicBackground)
+                .padding(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.CheckCircle,
+                    contentDescription = "Update Ready",
+                    tint = TextTeal,
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Update Ready to Install",
+                    fontFamily = PoppinsFamily,
+                    style = Typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                    color = TextPrimary,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "A new update has been downloaded. Restart the app now to apply the latest improvements.",
+                    fontFamily = PoppinsFamily,
+                    style = Typography.bodyMedium.copy(fontSize = 13.sp),
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Later", color = TextSecondary, fontFamily = PoppinsFamily)
+                    }
+                    Button(
+                        onClick = onRestart,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = TextTeal),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Restart", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = PoppinsFamily)
+                    }
+                }
+            }
         }
     }
 }
