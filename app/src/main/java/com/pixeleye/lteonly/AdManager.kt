@@ -38,7 +38,8 @@ object AdManager {
     private var lastAppOpenAdShowTime: Long = 0
     private var lastInterstitialAdShowTime: Long = 0
     
-    var force4GClickCount = 0
+    private var hasShownFirstInterstitial = false
+    private var clicksSinceLastInterstitial = 0
  
     private var isInitialized = false
     private var appContext: Context? = null
@@ -265,6 +266,41 @@ object AdManager {
         return dateDifference < numMilliSecondsPerHour * numHours
     }
 
+    /**
+     * Call this before launching an external intent (like opening RadioInfo or Settings)
+     * to prevent App Open Ads from popping up unexpectedly when returning to the app.
+     */
+    fun suppressNextAppOpenAd() {
+        ignoreNextAppOpenAd = true
+    }
+
+    /**
+     * Determines whether an Interstitial Ad should be shown when clicking "Force 4G".
+     * Follows strict Google AdMob policy & smart frequency capping:
+     * 1. User must NOT be a Pro subscriber.
+     * 2. If the first ad has NOT been shown yet, shows as soon as an ad is loaded and ready.
+     * 3. Once the first ad is shown, enforces a 3-click interval (at least 3 clicks after the previous ad)
+     *    AND a 3-minute cooldown between subsequent ads.
+     */
+    fun shouldShowInterstitialOnForce4G(): Boolean {
+        if (isProUser) return false
+
+        if (!hasShownFirstInterstitial) {
+            // First ad attempt: show whenever the ad is available and cooldown allows
+            if (isInterstitialAdAvailable() && canShowInterstitialAd()) {
+                return true
+            }
+            return false
+        }
+
+        // Subsequent ads: wait for at least 3 clicks after the previous ad was shown
+        clicksSinceLastInterstitial++
+        if (clicksSinceLastInterstitial >= 3 && canShowInterstitialAd() && isInterstitialAdAvailable()) {
+            return true
+        }
+        return false
+    }
+
     fun showAppOpenAdIfAvailable(activity: Activity) {
         // Strict Pro guardrail
         if (isProUser) {
@@ -275,15 +311,15 @@ object AdManager {
 
         if (isShowingAppOpenAd) return
 
-        val timeSinceLastAd = Date().time - lastAppOpenAdShowTime
-        if (timeSinceLastAd < 300000) { // 5 minutes cooldown
-            Log.d(TAG, "Skipping App Open Ad due to 5-minute cooldown")
+        if (ignoreNextAppOpenAd) {
+            Log.d(TAG, "Skipping App Open Ad because external intent or another fullscreen ad was active")
+            ignoreNextAppOpenAd = false
             return
         }
 
-        if (ignoreNextAppOpenAd) {
-            Log.d(TAG, "Skipping App Open Ad because another fullscreen ad is showing/was just shown")
-            ignoreNextAppOpenAd = false
+        val timeSinceLastAd = Date().time - lastAppOpenAdShowTime
+        if (timeSinceLastAd < 300000) { // 5 minutes cooldown
+            Log.d(TAG, "Skipping App Open Ad due to 5-minute cooldown")
             return
         }
 
@@ -336,47 +372,6 @@ object AdManager {
         return isInterstitialAdLoading && !isProUser
     }
 
-    fun showAppOpenAdOnSplash(activity: Activity, onComplete: () -> Unit) {
-        if (isProUser) {
-            onComplete()
-            return
-        }
-
-        if (ignoreNextAppOpenAd) {
-            Log.d(TAG, "Skipping App Open Ad on splash because another fullscreen ad is active")
-            ignoreNextAppOpenAd = false
-            onComplete()
-            return
-        }
-
-        if (appOpenAd != null && wasLoadTimeLessThanNHoursAgo(4)) {
-            appOpenAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-                override fun onAdDismissedFullScreenContent() {
-                    appOpenAd = null
-                    isShowingAppOpenAd = false
-                    onComplete()
-                    loadAppOpenAd(activity.applicationContext)
-                }
-
-                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                    appOpenAd = null
-                    isShowingAppOpenAd = false
-                    onComplete()
-                    loadAppOpenAd(activity.applicationContext)
-                }
-
-                override fun onAdShowedFullScreenContent() {
-                    isShowingAppOpenAd = true
-                    lastAppOpenAdShowTime = Date().time
-                    Log.d(TAG, "App Open Ad showed on splash")
-                }
-            }
-            appOpenAd?.show(activity)
-        } else {
-            onComplete()
-        }
-    }
-
     fun showInterstitial(
         activity: Activity,
         onAdShowed: () -> Unit = {},
@@ -403,7 +398,6 @@ object AdManager {
                 override fun onAdDismissedFullScreenContent() {
                     Log.d(TAG, "Interstitial ad dismissed")
                     interstitialAd = null
-                    lastInterstitialAdShowTime = Date().time
                     onAdDismissed()
                     loadInterstitial(activity.applicationContext)
                 }
@@ -418,6 +412,9 @@ object AdManager {
 
                 override fun onAdShowedFullScreenContent() {
                     Log.d(TAG, "Interstitial ad showed full screen")
+                    hasShownFirstInterstitial = true
+                    clicksSinceLastInterstitial = 0
+                    lastInterstitialAdShowTime = Date().time
                     onAdShowed()
                 }
             }

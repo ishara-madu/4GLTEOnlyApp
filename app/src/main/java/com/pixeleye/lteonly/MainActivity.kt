@@ -712,27 +712,24 @@ fun HomeTab(
                 val activity = context as? android.app.Activity
                 val openInfo = {
                     try {
+                        AdManager.suppressNextAppOpenAd()
                         RadioInfoHelper.openRadioInfo(context)
                     } catch (e: Exception) {
                         showDeviceCodesSheet = true
                     }
                 }
 
-                if (activity != null && !isPremiumPro) {
-                    if (AdManager.canShowInterstitialAd() && AdManager.isInterstitialAdAvailable()) {
-                        AdManager.showInterstitial(
-                            activity = activity,
-                            onAdShowed = { /* no-op */ },
-                            onAdDismissed = { openInfo() }
-                        )
-                    } else {
-                        openInfo()
-                        if (!AdManager.isInterstitialAdAvailable() && !AdManager.isInterstitialAdLoading()) {
-                            AdManager.loadInterstitial(activity)
-                        }
-                    }
+                if (activity != null && !isPremiumPro && AdManager.shouldShowInterstitialOnForce4G()) {
+                    AdManager.showInterstitial(
+                        activity = activity,
+                        onAdShowed = { /* no-op */ },
+                        onAdDismissed = { openInfo() }
+                    )
                 } else {
                     openInfo()
+                    if (activity != null && !isPremiumPro && !AdManager.isInterstitialAdAvailable() && !AdManager.isInterstitialAdLoading()) {
+                        AdManager.loadInterstitial(activity)
+                    }
                 }
             })
 
